@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#020507" />
+    <title>未知信号</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23050b0e'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23b6ded9'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%237aa6a2' stroke-opacity='.5'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="experience" aria-label="未知空间">
+      <section id="scene" class="scene" aria-hidden="true">
+        <svg
+          class="world"
+          viewBox="0 0 1920 1080"
+          preserveAspectRatio="xMidYMid slice"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#010305" />
+              <stop offset="0.58" stop-color="#071015" />
+              <stop offset="1" stop-color="#0b171b" />
+            </linearGradient>
+            <radialGradient id="distance" cx="52%" cy="62%" r="58%">
+              <stop offset="0" stop-color="#153039" stop-opacity="0.3" />
+              <stop offset="0.52" stop-color="#071217" stop-opacity="0.1" />
+              <stop offset="1" stop-color="#010305" stop-opacity="0" />
+            </radialGradient>
+            <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#16292d" />
+              <stop offset="0.18" stop-color="#101e22" />
+              <stop offset="0.62" stop-color="#071013" />
+              <stop offset="1" stop-color="#020507" />
+            </linearGradient>
+            <linearGradient id="trackSoft" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#b7e8e5" stop-opacity="0.06" />
+              <stop offset="0.52" stop-color="#98d9d6" stop-opacity="0.56" />
+              <stop offset="1" stop-color="#6faead" stop-opacity="0.08" />
+            </linearGradient>
+            <filter id="trackGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="horizonGlow" x="-20%" y="-200%" width="140%" height="500%">
+              <feGaussianBlur stdDeviation="10" />
+            </filter>
+          </defs>
+
+          <rect width="1920" height="1080" fill="url(#sky)" />
+          <rect width="1920" height="1080" fill="url(#distance)" />
+
+          <g class="light-tracks" fill="none" stroke-linecap="round">
+            <path
+              class="light-track light-track--far"
+              d="M -130 570 C 430 392, 1190 398, 2070 588"
+              pathLength="100"
+            />
+            <path
+              class="light-track light-track--rise"
+              d="M 395 1190 C 456 792, 606 390, 957 -160"
+              pathLength="100"
+            />
+            <path
+              class="light-track light-track--near"
+              d="M -180 1010 C 492 734, 1240 701, 2090 438"
+              pathLength="100"
+            />
+          </g>
+
+          <ellipse
+            class="horizon-haze"
+            cx="960"
+            cy="1190"
+            rx="1550"
+            ry="570"
+            fill="none"
+            stroke="#8bc0be"
+            stroke-opacity="0.12"
+            stroke-width="11"
+            filter="url(#horizonGlow)"
+          />
+          <path
+            class="ground"
+            d="M -170 916 C 430 759, 1390 759, 2090 918 L 2090 1210 L -170 1210 Z"
+            fill="url(#ground)"
+          />
+          <path
+            class="ground-rim"
+            d="M -170 916 C 430 759, 1390 759, 2090 918"
+            fill="none"
+            stroke="#779b99"
+            stroke-opacity="0.16"
+            stroke-width="2"
+          />
+          <path
+            class="ground-depth"
+            d="M 180 1008 C 650 884, 1345 883, 1780 1005"
+            fill="none"
+            stroke="#6f9693"
+            stroke-opacity="0.055"
+            stroke-width="2"
+          />
+        </svg>
+
+        <div class="vignette" aria-hidden="true"></div>
+        <div class="recovery-shade" aria-hidden="true"></div>
+
+        <button id="soundToggle" class="sound-toggle" type="button" aria-label="声音已关闭" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4.5 9.4h3.2l4-3.2v11.6l-4-3.2H4.5z" />
+            <path class="sound-wave" d="M15 9.2c.8.8 1.2 1.7 1.2 2.8s-.4 2-1.2 2.8" />
+            <path class="sound-slash" d="M5 4.7 19 19.3" />
+          </svg>
+        </button>
+
+        <p id="narration" class="narration">这里……好像不是普通的地面。</p>
+
+        <button id="signal" class="signal" type="button" aria-label="查看微弱信号">
+          <span class="signal__ring signal__ring--outer"></span>
+          <span class="signal__ring signal__ring--inner"></span>
+          <span class="signal__core"></span>
+        </button>
+
+        <div id="device" class="device" aria-live="polite">
+          <button id="deviceDock" class="device-dock" type="button" aria-label="打开返航定位器" aria-expanded="false">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <rect x="7" y="5" width="18" height="22" rx="5" />
+              <path d="M11 10h10M11 14h7" />
+              <circle cx="20.5" cy="21.5" r="1.7" />
+            </svg>
+          </button>
+
+          <section id="devicePanel" class="device-panel" aria-label="返航定位器状态">
+            <div class="device-panel__hardware" aria-hidden="true">
+              <i></i><i></i><i></i><i></i>
+            </div>
+            <div class="device-panel__header">
+              <div>
+                <span class="device-panel__signal" aria-hidden="true"></span>
+                <h1>返航定位器</h1>
+              </div>
+              <button id="deviceClose" class="device-close" type="button" aria-label="收起返航定位器">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg>
+              </button>
+            </div>
+            <dl class="device-readout">
+              <div><dt>目的地</dt><dd>珠海</dd></div>
+              <div><dt>南北位置</dt><dd>无法识别</dd></div>
+              <div><dt>东西位置</dt><dd>无法识别</dd></div>
+              <div class="device-readout__fault"><dt>定位系统</dt><dd>损坏</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <p id="taskPrompt" class="task-prompt">【调查这些陌生光轨】</p>
+        <p id="taskReminder" class="task-reminder">调查这些陌生光轨</p>
+      </section>
+
+      <div id="intro" class="intro" aria-live="polite" aria-atomic="true">
+        <p id="introMessage" class="intro__message"></p>
+      </div>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
