@@ -85,52 +85,46 @@ button:focus-visible {
   opacity: 0;
 }
 
+.light-tracks {
+  opacity: 0.42;
+  pointer-events: none;
+  transition: opacity 4.5s ease;
+}
+
 .light-track {
   stroke: url(#trackSoft);
-  stroke-width: 2.2;
+  stroke-width: var(--track-width, 1.8);
+  stroke-opacity: 0.62;
   filter: url(#trackGlow);
-  opacity: 0.18;
+  opacity: var(--track-opacity, 0.28);
+  vector-effect: non-scaling-stroke;
   animation: track-breathe 7.5s ease-in-out infinite alternate;
-  transition:
-    opacity 4.5s ease,
-    stroke-width 4.5s ease;
+  animation-delay: var(--track-delay, 0s);
 }
 
-.light-track--far {
-  opacity: 0.11;
-  stroke-width: 1.6;
-  animation-delay: -2.6s;
+.light-track--latitude {
+  --track-width: 1.85;
 }
 
-.light-track--rise {
-  opacity: 0.22;
-  stroke-width: 2.5;
-  animation-delay: -5.1s;
+.light-track--longitude {
+  --track-width: 1.55;
 }
 
-.light-track--near {
-  opacity: 0.17;
-  stroke-width: 2.1;
-  animation-delay: -1.2s;
+.sphere-network__latitudes {
+  opacity: 0.9;
 }
 
-.scene.tracks-awake .light-track--far {
-  opacity: 0.28;
+.sphere-network__longitudes {
+  opacity: 0.82;
 }
 
-.scene.tracks-awake .light-track--rise {
-  opacity: 0.54;
-  stroke-width: 2.8;
-}
-
-.scene.tracks-awake .light-track--near {
-  opacity: 0.45;
-  stroke-width: 2.55;
+.scene.tracks-awake .light-tracks {
+  opacity: 1;
 }
 
 @keyframes track-breathe {
-  from { filter: url(#trackGlow); }
-  to { filter: url(#trackGlow); opacity: 0.32; }
+  from { stroke-opacity: 0.48; }
+  to { stroke-opacity: 0.92; }
 }
 
 .intro {
