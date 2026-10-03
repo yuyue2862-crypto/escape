@@ -246,6 +246,49 @@
           <p id="positionTestFeedback" class="position-test__feedback" aria-live="polite"></p>
           <div id="positionTestActions" class="position-test__actions"></div>
         </section>
+
+        <section id="latitudeIntroStage" class="latitude-intro" aria-hidden="true">
+          <p id="latitudeIntroLine1" class="latitude-intro__line"></p>
+          <p id="latitudeIntroLine2" class="latitude-intro__line"></p>
+          <p id="latitudeIntroTitle" class="latitude-intro__title"></p>
+          <p id="latitudeIntroHint" class="latitude-intro__hint"></p>
+          <button id="latitudeIntroStart" class="latitude-intro__start" type="button">开始调查</button>
+        </section>
+
+        <section id="latitudeStage" class="latitude-stage" aria-hidden="true">
+          <p class="latitude-stage__kicker">任务二：修复南北定位</p>
+          <p id="latitudePrompt" class="latitude-stage__prompt" aria-live="polite"></p>
+
+          <div class="latitude-model-wrap">
+            <svg id="latitudeGlobe" class="latitude-globe" viewBox="0 0 620 620" aria-label="纬度教学球">
+              <defs>
+                <radialGradient id="latitudeSphereFill" cx="42%" cy="35%" r="68%">
+                  <stop offset="0" stop-color="#ffe47b" stop-opacity="0.12" />
+                  <stop offset="0.72" stop-color="#d8a43b" stop-opacity="0.04" />
+                  <stop offset="1" stop-color="#281b06" stop-opacity="0" />
+                </radialGradient>
+                <filter id="latitudeGlow" x="-70%" y="-70%" width="240%" height="240%">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <path id="latitudeSphereShell" class="latitude-globe__shell" />
+              <g id="latitudeTeachingLines" class="latitude-globe__lines"></g>
+              <g id="latitudeTeachingLabels" class="latitude-globe__labels"></g>
+              <g id="latitudeTeachingMarker" class="position-test-point latitude-teaching-marker" aria-hidden="true">
+                <circle class="position-test-point__halo" r="22" />
+                <circle class="position-test-point__ring" r="10" />
+                <circle class="position-test-point__core" r="4.5" />
+              </g>
+            </svg>
+          </div>
+
+          <p id="latitudeFeedback" class="latitude-stage__feedback" aria-live="polite"></p>
+          <div id="latitudeActions" class="latitude-stage__actions"></div>
+        </section>
       </section>
 
       <div id="intro" class="intro" aria-live="polite" aria-atomic="true">

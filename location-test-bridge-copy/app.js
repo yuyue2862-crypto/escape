@@ -60,6 +60,20 @@
   const progressTaskList = document.querySelector("#progressTaskList");
   const progressReset = document.querySelector("#progressReset");
   const progressResetConfirm = document.querySelector("#progressResetConfirm");
+  const latitudeIntroStage = document.querySelector("#latitudeIntroStage");
+  const latitudeIntroLine1 = document.querySelector("#latitudeIntroLine1");
+  const latitudeIntroLine2 = document.querySelector("#latitudeIntroLine2");
+  const latitudeIntroTitle = document.querySelector("#latitudeIntroTitle");
+  const latitudeIntroHint = document.querySelector("#latitudeIntroHint");
+  const latitudeIntroStart = document.querySelector("#latitudeIntroStart");
+  const latitudeStage = document.querySelector("#latitudeStage");
+  const latitudePrompt = document.querySelector("#latitudePrompt");
+  const latitudeFeedback = document.querySelector("#latitudeFeedback");
+  const latitudeActions = document.querySelector("#latitudeActions");
+  const latitudeSphereShell = document.querySelector("#latitudeSphereShell");
+  const latitudeTeachingLines = document.querySelector("#latitudeTeachingLines");
+  const latitudeTeachingLabels = document.querySelector("#latitudeTeachingLabels");
+  const latitudeTeachingMarker = document.querySelector("#latitudeTeachingMarker");
 
   const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -122,6 +136,25 @@
     },
   };
 
+  const latitudeTeachingValues = [-80, -60, -40, -20, 0, 20, 40, 60, 80];
+  const latitudeTeachingModel = {
+    radius: 1,
+    rotation: { x: -12, y: -18, z: 0 },
+    center: [310, 310],
+    scale: 220,
+  };
+  const latitudeTravelLongitude = 18;
+  const latitudeTaskState = {
+    phase: "idle",
+    equatorFound: false,
+    exploredDirections: [],
+    nsEstablished: false,
+    calibration1Complete: false,
+    calibration2Complete: false,
+    calibration1Errors: 0,
+    calibration2Errors: 0,
+  };
+
   const PROGRESS_KEY = "geoEscapeProgress";
   const RESUME_REQUEST_KEY = "geoEscapeResumeRequest";
   const PROGRESS_VERSION = 1;
@@ -136,6 +169,11 @@
       title: "定位测试：建立位置与线的对应",
       startCheckpoint: "position-test-start",
     },
+    {
+      id: "latitude",
+      title: "任务二：修复南北定位",
+      startCheckpoint: "latitude-start",
+    },
   ];
   const checkpointRegistry = {
     opening: { task: "opening", furthestTask: "opening" },
@@ -147,9 +185,16 @@
     "position-test-start": { task: "position-test", furthestTask: "position-test" },
     "north-test-complete": { task: "position-test", furthestTask: "position-test" },
     "east-test-complete": { task: "position-test", furthestTask: "position-test" },
-    "position-test-complete": { task: "position-test", furthestTask: "position-test" },
+    "position-test-complete": { task: "latitude", furthestTask: "latitude" },
+    "latitude-start": { task: "latitude", furthestTask: "latitude" },
+    "latitude-equator-found": { task: "latitude", furthestTask: "latitude" },
+    "latitude-one-side-complete": { task: "latitude", furthestTask: "latitude" },
+    "latitude-both-sides-complete": { task: "latitude", furthestTask: "latitude" },
+    "latitude-ns-complete": { task: "latitude", furthestTask: "latitude" },
+    "latitude-calibration-1-complete": { task: "latitude", furthestTask: "latitude" },
+    "latitude-complete": { task: "latitude", furthestTask: "latitude" },
   };
-  const taskOrder = ["opening", "task1", "position-test"];
+  const taskOrder = ["opening", "task1", "position-test", "latitude"];
   let progressData = loadProgress();
   let activeCheckpoint = "opening";
 
@@ -164,6 +209,13 @@
         northCorrect: false,
         eastCorrect: false,
         mapping: { north: null, east: null },
+      },
+      latitude: {
+        equatorFound: false,
+        exploredDirections: [],
+        nsEstablished: false,
+        calibration1Complete: false,
+        calibration2Complete: false,
       },
     };
   }
@@ -191,6 +243,7 @@
     const emptyState = getEmptyTaskState();
     const task1State = candidate.taskState?.task1 || {};
     const positionState = candidate.taskState?.positionTest || {};
+    const latitudeState = candidate.taskState?.latitude || {};
     const validScannedTypes = Array.isArray(task1State.scannedTypes)
       ? task1State.scannedTypes.filter((type) => type === "latitude" || type === "longitude")
       : [];
@@ -202,10 +255,20 @@
     const validCompletedTasks = Array.isArray(candidate.completedTasks)
       ? candidate.completedTasks.filter((taskId) => taskRegistry.some((task) => task.id === taskId))
       : [];
-    const normalizedFurthestTask = validCompletedTasks.includes("task1")
-      && taskOrder.indexOf(candidate.furthestTask) < taskOrder.indexOf("position-test")
-      ? "position-test"
-      : candidate.furthestTask;
+    let normalizedFurthestTask = candidate.furthestTask;
+    if (
+      validCompletedTasks.includes("task1")
+      && taskOrder.indexOf(normalizedFurthestTask) < taskOrder.indexOf("position-test")
+    ) {
+      normalizedFurthestTask = "position-test";
+    }
+    if (
+      (validCompletedTasks.includes("position-test") || candidate.checkpoint === "position-test-complete")
+      && taskOrder.indexOf(normalizedFurthestTask) < taskOrder.indexOf("latitude")
+    ) {
+      normalizedFurthestTask = "latitude";
+    }
+    const normalizedCurrentTask = checkpointRegistry[candidate.checkpoint].task;
     const taskCheckpoints = {};
     taskRegistry.forEach((task) => {
       const savedCheckpoint = candidate.taskCheckpoints?.[task.id];
@@ -213,8 +276,8 @@
         taskCheckpoints[task.id] = savedCheckpoint;
       }
     });
-    if (!taskCheckpoints[candidate.currentTask] && candidate.currentTask !== "opening") {
-      taskCheckpoints[candidate.currentTask] = candidate.checkpoint;
+    if (!taskCheckpoints[normalizedCurrentTask] && normalizedCurrentTask !== "opening") {
+      taskCheckpoints[normalizedCurrentTask] = candidate.checkpoint;
     }
     if (
       normalizedFurthestTask === "position-test"
@@ -222,6 +285,13 @@
       && validCompletedTasks.includes("task1")
     ) {
       taskCheckpoints["position-test"] = "task1-complete";
+    }
+    if (
+      normalizedFurthestTask === "latitude"
+      && !taskCheckpoints.latitude
+      && validCompletedTasks.includes("position-test")
+    ) {
+      taskCheckpoints.latitude = "position-test-complete";
     }
     const completedTaskState = {};
     if (candidate.completedTaskState?.task1) {
@@ -248,11 +318,23 @@
         mapping: { ...(candidate.completedTaskState["position-test"].mapping || {}) },
       };
     }
+    if (candidate.completedTaskState?.latitude) {
+      completedTaskState.latitude = {
+        equatorFound: Boolean(candidate.completedTaskState.latitude.equatorFound),
+        exploredDirections: [...new Set(
+          (candidate.completedTaskState.latitude.exploredDirections || [])
+            .filter((direction) => direction === "north" || direction === "south"),
+        )],
+        nsEstablished: Boolean(candidate.completedTaskState.latitude.nsEstablished),
+        calibration1Complete: Boolean(candidate.completedTaskState.latitude.calibration1Complete),
+        calibration2Complete: Boolean(candidate.completedTaskState.latitude.calibration2Complete),
+      };
+    }
 
     return {
       version: PROGRESS_VERSION,
       furthestTask: normalizedFurthestTask,
-      currentTask: candidate.currentTask,
+      currentTask: normalizedCurrentTask,
       checkpoint: candidate.checkpoint,
       completedTasks: [...new Set(validCompletedTasks)],
       taskCheckpoints,
@@ -273,6 +355,16 @@
             north: positionState.mapping?.north || emptyState.positionTest.mapping.north,
             east: positionState.mapping?.east || emptyState.positionTest.mapping.east,
           },
+        },
+        latitude: {
+          equatorFound: Boolean(latitudeState.equatorFound),
+          exploredDirections: [...new Set(
+            (latitudeState.exploredDirections || [])
+              .filter((direction) => direction === "north" || direction === "south"),
+          )],
+          nsEstablished: Boolean(latitudeState.nsEstablished),
+          calibration1Complete: Boolean(latitudeState.calibration1Complete),
+          calibration2Complete: Boolean(latitudeState.calibration2Complete),
         },
       },
     };
@@ -312,6 +404,13 @@
         eastCorrect: positionTestState.eastCorrect,
         mapping: { ...positionTestState.mapping },
       },
+      latitude: {
+        equatorFound: latitudeTaskState.equatorFound,
+        exploredDirections: [...latitudeTaskState.exploredDirections],
+        nsEstablished: latitudeTaskState.nsEstablished,
+        calibration1Complete: latitudeTaskState.calibration1Complete,
+        calibration2Complete: latitudeTaskState.calibration2Complete,
+      },
     };
   }
 
@@ -332,6 +431,7 @@
     ])];
     const shouldCaptureTask1 = checkpoint.startsWith("task1-");
     const shouldCapturePosition = checkpoint.includes("test-") || checkpoint === "position-test-complete";
+    const shouldCaptureLatitude = checkpoint.startsWith("latitude-");
 
     const nextProgress = {
       version: PROGRESS_VERSION,
@@ -363,6 +463,11 @@
             ...(suppliedState.positionTest?.mapping || {}),
           },
         },
+        latitude: {
+          ...previousState.latitude,
+          ...(shouldCaptureLatitude ? liveState.latitude : {}),
+          ...(suppliedState.latitude || {}),
+        },
       },
     };
 
@@ -376,9 +481,7 @@
 
   function markTaskComplete(taskId, checkpoint) {
     const liveState = getCurrentTaskState();
-    const completedState = taskId === "task1"
-      ? liveState.task1
-      : liveState.positionTest;
+    const completedState = liveState[taskId === "position-test" ? "positionTest" : taskId];
     return updateCheckpoint(checkpoint, {
       completedTasks: [taskId],
       completedTaskState: { [taskId]: completedState },
@@ -442,21 +545,34 @@
   function jumpToTask(taskId) {
     const task = taskRegistry.find((entry) => entry.id === taskId);
     if (!task) return;
-    const taskState = taskId === "task1"
-      ? {
+    let taskState;
+    if (taskId === "task1") {
+      taskState = {
         task1: {
           scannedTypes: [],
           scanHistory: [],
           scannedLineIndices: {},
         },
-      }
-      : {
+      };
+    } else if (taskId === "position-test") {
+      taskState = {
         positionTest: {
           northCorrect: false,
           eastCorrect: false,
           mapping: { north: null, east: null },
         },
       };
+    } else {
+      taskState = {
+        latitude: {
+          equatorFound: false,
+          exploredDirections: [],
+          nsEstablished: false,
+          calibration1Complete: false,
+          calibration2Complete: false,
+        },
+      };
+    }
     updateCheckpoint(task.startCheckpoint, { taskState });
     if (!setResumeRequest(task.startCheckpoint)) return;
     window.location.reload();
@@ -903,6 +1019,199 @@
     await wait(900);
   }
 
+  function getLatitudeTeachingLabelPoint(latitude) {
+    let rightmostPoint = null;
+    for (let longitude = -180; longitude <= 180; longitude += 2) {
+      const point = projectOrthographicPoint(
+        getLatitudePoint(latitude, longitude, latitudeTeachingModel.radius),
+        latitudeTeachingModel,
+      );
+      if (!rightmostPoint || point.x > rightmostPoint.x) rightmostPoint = point;
+    }
+    return rightmostPoint;
+  }
+
+  function createLatitudeTeachingText(className, latitude, x, y) {
+    return createSvgElement("text", {
+      class: className,
+      x: x.toFixed(2),
+      y: y.toFixed(2),
+      "data-latitude": latitude,
+      "aria-hidden": "true",
+    });
+  }
+
+  function buildLatitudeTeachingGlobe() {
+    latitudeTeachingLines.replaceChildren();
+    latitudeTeachingLabels.replaceChildren();
+    latitudeSphereShell.setAttribute("d", createSphereShellPath("latitude", latitudeTeachingModel));
+
+    latitudeTeachingValues.forEach((latitude) => {
+      const group = createSvgElement("g", {
+        class: "latitude-line-group",
+        "data-latitude": latitude,
+        role: "button",
+        tabindex: -1,
+        "aria-label": "纬线候选",
+        "aria-disabled": "true",
+      });
+      createProjectionPaths(
+        "latitude",
+        latitude,
+        "latitude-line",
+        latitudeTeachingModel,
+      ).forEach((path) => group.append(path));
+      createProjectionPaths(
+        "latitude",
+        latitude,
+        "latitude-line-hit",
+        latitudeTeachingModel,
+      ).forEach((path) => group.append(path));
+      latitudeTeachingLines.append(group);
+
+      const labelPoint = getLatitudeTeachingLabelPoint(latitude);
+      const label = createLatitudeTeachingText(
+        latitude === 0 ? "latitude-label latitude-label--equator" : "latitude-label",
+        latitude,
+        labelPoint.x + 14,
+        labelPoint.y + 8,
+      );
+      if (latitude === 0) label.textContent = "赤道 0°";
+      latitudeTeachingLabels.append(label);
+    });
+
+    [90, -90].forEach((latitude) => {
+      const point = projectOrthographicPoint(
+        getLatitudePoint(latitude, latitudeTravelLongitude, latitudeTeachingModel.radius),
+        latitudeTeachingModel,
+      );
+      const dot = createSvgElement("circle", {
+        class: "latitude-pole-dot",
+        cx: point.x.toFixed(2),
+        cy: point.y.toFixed(2),
+        r: 5,
+        "data-pole-latitude": latitude,
+      });
+      const degree = createLatitudeTeachingText(
+        "latitude-pole-degree",
+        latitude,
+        point.x,
+        point.y + (latitude > 0 ? -22 : 28),
+      );
+      const name = createLatitudeTeachingText(
+        "latitude-pole-name",
+        latitude,
+        point.x,
+        point.y + (latitude > 0 ? 31 : 56),
+      );
+      degree.setAttribute("text-anchor", "middle");
+      name.setAttribute("text-anchor", "middle");
+      name.textContent = latitude > 0 ? "北极" : "南极";
+      latitudeTeachingLabels.append(dot, degree, name);
+    });
+  }
+
+  function getLatitudeLineGroup(latitude) {
+    return latitudeTeachingLines.querySelector(`.latitude-line-group[data-latitude="${latitude}"]`);
+  }
+
+  function getLatitudeDegreeLabel(latitude) {
+    return latitudeTeachingLabels.querySelector(`.latitude-label[data-latitude="${latitude}"]`);
+  }
+
+  function getLatitudePoleElements(latitude) {
+    return {
+      degree: latitudeTeachingLabels.querySelector(`.latitude-pole-degree[data-latitude="${latitude}"]`),
+      name: latitudeTeachingLabels.querySelector(`.latitude-pole-name[data-latitude="${latitude}"]`),
+    };
+  }
+
+  function setLatitudeLineInteraction(isInteractive) {
+    latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
+      group.classList.toggle("is-interactive", isInteractive);
+      group.setAttribute("tabindex", isInteractive ? "0" : "-1");
+      group.setAttribute("aria-disabled", String(!isInteractive));
+      group.querySelectorAll(".latitude-line-hit").forEach((hitArea) => {
+        hitArea.style.pointerEvents = isInteractive ? "stroke" : "none";
+      });
+    });
+  }
+
+  function setLatitudeMarker(latitude) {
+    const point = projectOrthographicPoint(
+      getLatitudePoint(latitude, latitudeTravelLongitude, latitudeTeachingModel.radius),
+      latitudeTeachingModel,
+    );
+    latitudeTeachingMarker.setAttribute(
+      "transform",
+      `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)})`,
+    );
+    latitudeTeachingMarker.classList.add("is-visible");
+    latitudeTeachingMarker.setAttribute("aria-hidden", "false");
+    latitudeTeachingMarker.dataset.latitude = latitude.toFixed(2);
+  }
+
+  function hideLatitudeMarker() {
+    latitudeTeachingMarker.classList.remove("is-visible", "is-moving");
+    latitudeTeachingMarker.setAttribute("aria-hidden", "true");
+  }
+
+  function showLatitudeDegree(latitude, notation = "plain") {
+    if (latitude === 0) {
+      const equatorLabel = getLatitudeDegreeLabel(0);
+      equatorLabel.textContent = "赤道 0°";
+      equatorLabel.classList.add("is-visible");
+      equatorLabel.setAttribute("aria-hidden", "false");
+      return;
+    }
+
+    const suffix = notation === "ns" ? (latitude > 0 ? "N" : "S") : "";
+    const text = `${Math.abs(latitude)}°${suffix}`;
+    if (Math.abs(latitude) === 90) {
+      const pole = getLatitudePoleElements(latitude);
+      pole.degree.textContent = text;
+      pole.degree.classList.add("is-visible");
+      pole.name.classList.add("is-visible");
+      pole.degree.setAttribute("aria-hidden", "false");
+      pole.name.setAttribute("aria-hidden", "false");
+      return;
+    }
+
+    const label = getLatitudeDegreeLabel(latitude);
+    label.textContent = text;
+    label.classList.add("is-visible");
+    label.setAttribute("aria-hidden", "false");
+  }
+
+  function showLatitudeDirection(direction, notation = "plain") {
+    const sign = direction === "north" ? 1 : -1;
+    [20, 40, 60, 80, 90].forEach((degree) => showLatitudeDegree(sign * degree, notation));
+  }
+
+  function hideLatitudeDegreeLabels(keepEquator = true) {
+    latitudeTeachingLabels.querySelectorAll(
+      ".latitude-label, .latitude-pole-degree, .latitude-pole-name",
+    ).forEach((label) => {
+      const latitude = Number(label.dataset.latitude);
+      const shouldRemainVisible = keepEquator && latitude === 0;
+      label.classList.toggle("is-visible", shouldRemainVisible);
+      label.setAttribute("aria-hidden", String(!shouldRemainVisible));
+    });
+  }
+
+  function resetLatitudeTeachingVisuals() {
+    latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
+      group.classList.remove(
+        "is-interactive",
+        "is-equator",
+        "is-calibration-target",
+        "is-pair-flash",
+      );
+    });
+    hideLatitudeDegreeLabels(false);
+    hideLatitudeMarker();
+  }
+
   function waitForContinue(button) {
     button.disabled = false;
     button.classList.add("is-visible");
@@ -1311,6 +1620,8 @@
     taskReminder.textContent = "下一步：想办法区分不同的纬线";
     taskReminder.classList.add("is-visible");
     markTaskComplete("position-test", "position-test-complete");
+    await wait(1500);
+    await showLatitudeTaskIntro(true);
   }
 
   async function beginPositionTest() {
@@ -1333,6 +1644,383 @@
     await runEastExperiment();
     await runPositionMapping();
     await finishPositionTest();
+  }
+
+  function setLatitudeCopy({ prompt = "", feedback = "" } = {}) {
+    latitudePrompt.textContent = prompt;
+    latitudeFeedback.textContent = feedback;
+  }
+
+  function setLatitudeActions(actions = []) {
+    latitudeActions.replaceChildren();
+    actions.forEach(({ label, action }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.dataset.latitudeAction = action;
+      latitudeActions.append(button);
+    });
+  }
+
+  function updateLatitudeDevice() {
+    deviceNetworkRow.hidden = false;
+    deviceNetworkValue.textContent = "经线、纬线";
+    deviceNorthValue.textContent = "纬度识别已恢复";
+    deviceEastValue.textContent = "对应经线";
+    deviceSystemValue.textContent = "仍未完成";
+    deviceSystemRow.classList.add("device-readout__fault");
+    deviceSystemRow.classList.remove("device-readout__ready");
+  }
+
+  function resetLatitudeTaskState() {
+    latitudeTaskState.phase = "idle";
+    latitudeTaskState.equatorFound = false;
+    latitudeTaskState.exploredDirections.length = 0;
+    latitudeTaskState.nsEstablished = false;
+    latitudeTaskState.calibration1Complete = false;
+    latitudeTaskState.calibration2Complete = false;
+    latitudeTaskState.calibration1Errors = 0;
+    latitudeTaskState.calibration2Errors = 0;
+  }
+
+  function loadLatitudeTaskState() {
+    const savedState = progressData?.taskState?.latitude || getEmptyTaskState().latitude;
+    latitudeTaskState.equatorFound = Boolean(savedState.equatorFound);
+    latitudeTaskState.exploredDirections.length = 0;
+    latitudeTaskState.exploredDirections.push(...savedState.exploredDirections);
+    latitudeTaskState.nsEstablished = Boolean(savedState.nsEstablished);
+    latitudeTaskState.calibration1Complete = Boolean(savedState.calibration1Complete);
+    latitudeTaskState.calibration2Complete = Boolean(savedState.calibration2Complete);
+    latitudeTaskState.calibration1Errors = 0;
+    latitudeTaskState.calibration2Errors = 0;
+  }
+
+  function showLatitudeIntroContent() {
+    latitudeIntroLine1.textContent = "南北方向已经找对了。";
+    latitudeIntroLine2.textContent = "可是，这么多条纬线，怎样才能知道自己具体在哪一条？";
+    latitudeIntroTitle.textContent = "任务二：修复南北定位";
+    latitudeIntroHint.textContent = "先想办法区分不同的纬线。";
+    latitudeIntroStart.hidden = false;
+    latitudeIntroStart.disabled = false;
+  }
+
+  async function showLatitudeTaskIntro(animate = false) {
+    scene.classList.remove("position-test-active", "latitude-active", "latitude-extracting");
+    positionTestStage.setAttribute("aria-hidden", "true");
+    positionTestLayer.classList.remove("is-visible");
+    positionTestLayer.setAttribute("aria-hidden", "true");
+    taskReminder.classList.remove("is-visible");
+    latitudeStage.setAttribute("aria-hidden", "true");
+    latitudeIntroStage.setAttribute("aria-hidden", "false");
+    latitudeIntroStage.classList.add("is-visible");
+
+    if (!animate) {
+      showLatitudeIntroContent();
+      return;
+    }
+
+    latitudeIntroLine1.textContent = "南北方向已经找对了。";
+    latitudeIntroLine2.textContent = "";
+    latitudeIntroTitle.textContent = "";
+    latitudeIntroHint.textContent = "";
+    latitudeIntroStart.hidden = true;
+    await wait(1800);
+    latitudeIntroLine2.textContent = "可是，这么多条纬线，怎样才能知道自己具体在哪一条？";
+    await wait(2100);
+    latitudeIntroTitle.textContent = "任务二：修复南北定位";
+    latitudeIntroHint.textContent = "先想办法区分不同的纬线。";
+    latitudeIntroStart.hidden = false;
+  }
+
+  function activateLatitudeTeachingStage() {
+    prepareCompletedTaskOneWorld();
+    updatePositionDevice(true);
+    latitudeIntroStage.classList.remove("is-visible");
+    latitudeIntroStage.setAttribute("aria-hidden", "true");
+    latitudeStage.setAttribute("aria-hidden", "false");
+    scene.classList.add("latitude-active");
+    buildLatitudeTeachingGlobe();
+    resetLatitudeTeachingVisuals();
+    setLatitudeActions();
+    setLatitudeCopy();
+  }
+
+  function prepareLatitudeEquatorQuestion() {
+    latitudeTaskState.phase = "equator-question";
+    setLatitudeLineInteraction(true);
+    setLatitudeCopy({ prompt: "你认为哪条纬线适合作为纬度的0度线？" });
+    setLatitudeActions();
+  }
+
+  async function startLatitudeTask() {
+    resetLatitudeTaskState();
+    updateCheckpoint("latitude-start");
+    latitudeIntroStart.disabled = true;
+    latitudeIntroStage.classList.remove("is-visible");
+    latitudeIntroStage.setAttribute("aria-hidden", "true");
+    scene.classList.add("latitude-extracting");
+    await wait(950);
+    activateLatitudeTeachingStage();
+    scene.classList.remove("latitude-extracting");
+    await wait(450);
+    prepareLatitudeEquatorQuestion();
+  }
+
+  function showLatitudeExplorationChoices() {
+    latitudeTaskState.phase = "choose-direction";
+    setLatitudeLineInteraction(false);
+    getLatitudeLineGroup(0)?.classList.add("is-equator");
+    showLatitudeDegree(0);
+    setLatitudeMarker(0);
+    setLatitudeCopy({
+      prompt: latitudeTaskState.exploredDirections.length
+        ? "另一侧还没有探索。"
+        : "从赤道出发，选择一个方向进行探索。",
+    });
+    const actions = [];
+    if (!latitudeTaskState.exploredDirections.includes("north")) {
+      actions.push({ label: "向北探索", action: "explore-north" });
+    }
+    if (!latitudeTaskState.exploredDirections.includes("south")) {
+      actions.push({ label: "向南探索", action: "explore-south" });
+    }
+    setLatitudeActions(actions);
+  }
+
+  function animateLatitudeDirection(direction) {
+    const sign = direction === "north" ? 1 : -1;
+    const crossedDegrees = [20, 40, 60, 80, 90];
+    const duration = 5600;
+    let startTime = null;
+    let nextDegreeIndex = 0;
+    latitudeTeachingMarker.classList.add("is-moving");
+
+    return new Promise((resolve) => {
+      function renderFrame(timestamp) {
+        if (startTime === null) startTime = timestamp;
+        const rawProgress = Math.min(1, (timestamp - startTime) / duration);
+        const easedProgress = rawProgress * rawProgress * (3 - 2 * rawProgress);
+        const latitude = sign * 90 * easedProgress;
+        setLatitudeMarker(latitude);
+
+        while (
+          nextDegreeIndex < crossedDegrees.length
+          && Math.abs(latitude) >= crossedDegrees[nextDegreeIndex]
+        ) {
+          showLatitudeDegree(sign * crossedDegrees[nextDegreeIndex]);
+          nextDegreeIndex += 1;
+        }
+
+        if (rawProgress < 1) {
+          window.requestAnimationFrame(renderFrame);
+          return;
+        }
+        latitudeTeachingMarker.classList.remove("is-moving");
+        resolve();
+      }
+      window.requestAnimationFrame(renderFrame);
+    });
+  }
+
+  function flashLatitudePairs() {
+    [-80, -60, -40, -20, 20, 40, 60, 80].forEach((latitude) => {
+      getLatitudeLineGroup(latitude)?.classList.add("is-pair-flash");
+    });
+    window.setTimeout(() => {
+      latitudeTeachingLines.querySelectorAll(".is-pair-flash").forEach((group) => {
+        group.classList.remove("is-pair-flash");
+      });
+    }, 1300);
+  }
+
+  function showBothLatitudeSidesQuestion() {
+    latitudeTaskState.phase = "both-sides-question";
+    getLatitudeLineGroup(0)?.classList.add("is-equator");
+    showLatitudeDegree(0);
+    showLatitudeDirection("north");
+    showLatitudeDirection("south");
+    hideLatitudeMarker();
+    setLatitudeCopy({
+      prompt: "两边都有相同的度数，如何分辨它们在赤道的哪一边？",
+    });
+    setLatitudeActions([{ label: "继续", action: "establish-ns" }]);
+  }
+
+  async function exploreLatitudeDirection(direction) {
+    if (latitudeTaskState.exploredDirections.includes(direction)) return;
+    latitudeTaskState.phase = `exploring-${direction}`;
+    setLatitudeActions();
+    setLatitudeCopy({
+      prompt: direction === "north"
+        ? "定位点从赤道向北移动。"
+        : "定位点从赤道向南移动。",
+    });
+    setLatitudeMarker(0);
+    await animateLatitudeDirection(direction);
+    await wait(650);
+    hideLatitudeMarker();
+    await wait(430);
+    setLatitudeMarker(0);
+    latitudeTaskState.exploredDirections.push(direction);
+
+    if (latitudeTaskState.exploredDirections.length === 1) {
+      updateCheckpoint("latitude-one-side-complete");
+      showLatitudeExplorationChoices();
+      return;
+    }
+
+    updateCheckpoint("latitude-both-sides-complete");
+    flashLatitudePairs();
+    showBothLatitudeSidesQuestion();
+  }
+
+  async function establishLatitudeNotation() {
+    latitudeTaskState.phase = "establishing-ns";
+    setLatitudeActions();
+    setLatitudeCopy({ prompt: "赤道以北，叫北纬，用 N 表示。" });
+    for (const degree of [20, 40, 60, 80, 90]) {
+      showLatitudeDegree(degree, "ns");
+      await wait(230);
+    }
+    await wait(850);
+    setLatitudeCopy({ prompt: "赤道以南，叫南纬，用 S 表示。" });
+    for (const degree of [20, 40, 60, 80, 90]) {
+      showLatitudeDegree(-degree, "ns");
+      await wait(230);
+    }
+    await wait(750);
+    latitudeTaskState.nsEstablished = true;
+    updateCheckpoint("latitude-ns-complete");
+    setLatitudeCopy({
+      feedback: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
+    });
+    setLatitudeActions([{ label: "进入定位校准", action: "start-calibration-1" }]);
+  }
+
+  function startLatitudeCalibrationOne() {
+    latitudeTaskState.phase = "calibration-1";
+    latitudeTaskState.calibration1Errors = 0;
+    hideLatitudeDegreeLabels(true);
+    latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
+      group.classList.remove("is-calibration-target");
+    });
+    setLatitudeLineInteraction(true);
+    setLatitudeCopy({ prompt: "校准1：请找到 40°S。" });
+    setLatitudeActions();
+  }
+
+  function startLatitudeCalibrationTwo() {
+    latitudeTaskState.phase = "calibration-2";
+    latitudeTaskState.calibration2Errors = 0;
+    hideLatitudeDegreeLabels(true);
+    setLatitudeLineInteraction(false);
+    latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
+      group.classList.remove("is-calibration-target");
+    });
+    getLatitudeLineGroup(60)?.classList.add("is-calibration-target");
+    setLatitudeCopy({ prompt: "这条纬线的纬度是多少？" });
+    setLatitudeActions([
+      { label: "60°N", action: "answer-60-n" },
+      { label: "60°S", action: "answer-60-s" },
+    ]);
+  }
+
+  function showLatitudeTaskEnding() {
+    latitudeIntroStage.setAttribute("aria-hidden", "false");
+    latitudeIntroStage.classList.add("is-visible");
+    latitudeIntroLine1.textContent = "南北位置已经解决了。接下来，要想办法区分不同的经线。";
+    latitudeIntroLine2.textContent = "";
+    latitudeIntroTitle.textContent = "";
+    latitudeIntroHint.textContent = "";
+    latitudeIntroStart.hidden = true;
+  }
+
+  async function completeLatitudeTask() {
+    latitudeTaskState.phase = "complete";
+    latitudeTaskState.calibration2Complete = true;
+    setLatitudeLineInteraction(false);
+    latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
+      group.classList.remove("is-calibration-target");
+    });
+    getLatitudeLineGroup(0)?.classList.add("is-equator");
+    showLatitudeDegree(0);
+    showLatitudeDirection("north", "ns");
+    showLatitudeDirection("south", "ns");
+    setLatitudeActions();
+    setLatitudeCopy({
+      prompt: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
+    });
+    markTaskComplete("latitude", "latitude-complete");
+    await wait(1500);
+    scene.classList.remove("latitude-active");
+    latitudeStage.setAttribute("aria-hidden", "true");
+    await wait(900);
+    updateLatitudeDevice();
+    device.classList.add("is-found", "is-position-alert");
+    setDeviceOpen(true);
+    showLatitudeTaskEnding();
+  }
+
+  function restoreLatitudeStart() {
+    resetLatitudeTaskState();
+    activateLatitudeTeachingStage();
+    prepareLatitudeEquatorQuestion();
+  }
+
+  function restoreLatitudeEquatorFound() {
+    loadLatitudeTaskState();
+    activateLatitudeTeachingStage();
+    latitudeTaskState.equatorFound = true;
+    getLatitudeLineGroup(0)?.classList.add("is-equator");
+    showLatitudeDegree(0);
+    showLatitudeExplorationChoices();
+  }
+
+  function restoreLatitudeOneSideComplete() {
+    loadLatitudeTaskState();
+    activateLatitudeTeachingStage();
+    getLatitudeLineGroup(0)?.classList.add("is-equator");
+    showLatitudeDegree(0);
+    latitudeTaskState.exploredDirections.forEach((direction) => {
+      showLatitudeDirection(direction);
+    });
+    showLatitudeExplorationChoices();
+  }
+
+  function restoreLatitudeBothSidesComplete() {
+    loadLatitudeTaskState();
+    activateLatitudeTeachingStage();
+    showBothLatitudeSidesQuestion();
+  }
+
+  function restoreLatitudeNotationComplete() {
+    loadLatitudeTaskState();
+    activateLatitudeTeachingStage();
+    getLatitudeLineGroup(0)?.classList.add("is-equator");
+    showLatitudeDegree(0);
+    showLatitudeDirection("north", "ns");
+    showLatitudeDirection("south", "ns");
+    setLatitudeCopy({
+      feedback: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
+    });
+    setLatitudeActions([{ label: "进入定位校准", action: "start-calibration-1" }]);
+  }
+
+  function restoreLatitudeCalibrationOneComplete() {
+    loadLatitudeTaskState();
+    activateLatitudeTeachingStage();
+    getLatitudeLineGroup(0)?.classList.add("is-equator");
+    showLatitudeDegree(0);
+    startLatitudeCalibrationTwo();
+  }
+
+  function restoreLatitudeComplete() {
+    prepareCompletedTaskOneWorld();
+    latitudeTaskState.phase = "complete";
+    updateLatitudeDevice();
+    device.classList.add("is-found", "is-position-alert");
+    setDeviceOpen(true);
+    showLatitudeTaskEnding();
   }
 
   function updateSignalGuidePosition() {
@@ -1898,6 +2586,16 @@
     positionMapping.hidden = true;
     positionTestActions.replaceChildren();
     setPositionTestCopy();
+    latitudeIntroStage.classList.remove("is-visible");
+    latitudeIntroStage.setAttribute("aria-hidden", "true");
+    latitudeIntroStart.hidden = false;
+    latitudeIntroStart.disabled = false;
+    latitudeStage.setAttribute("aria-hidden", "true");
+    latitudeActions.replaceChildren();
+    setLatitudeCopy();
+    latitudeTeachingLines.replaceChildren();
+    latitudeTeachingLabels.replaceChildren();
+    hideLatitudeMarker();
     clearNetworkFocus();
     clearPositionTrackEffects();
     positionTestLayer.classList.remove("is-visible", "is-moving");
@@ -2042,18 +2740,12 @@
   }
 
   function restorePositionTestComplete() {
-    preparePositionTestRestore();
+    prepareCompletedTaskOneWorld();
     positionTestState.phase = "complete";
     positionTestState.northCorrect = true;
     positionTestState.eastCorrect = true;
     updatePositionDevice(true);
-    setPositionMarker(positionTestConfig.start.latitude, positionTestConfig.start.longitude);
-    setPositionTestCopy({
-      prompt: "可是，同一组里有这么多条线，怎么知道自己具体在哪一条？",
-      feedback: "下一步：想办法区分不同的纬线",
-    });
-    taskReminder.textContent = "下一步：想办法区分不同的纬线";
-    taskReminder.classList.add("is-visible");
+    void showLatitudeTaskIntro(false);
   }
 
   function restoreCheckpoint(checkpoint) {
@@ -2083,6 +2775,27 @@
         break;
       case "position-test-complete":
         restorePositionTestComplete();
+        break;
+      case "latitude-start":
+        restoreLatitudeStart();
+        break;
+      case "latitude-equator-found":
+        restoreLatitudeEquatorFound();
+        break;
+      case "latitude-one-side-complete":
+        restoreLatitudeOneSideComplete();
+        break;
+      case "latitude-both-sides-complete":
+        restoreLatitudeBothSidesComplete();
+        break;
+      case "latitude-ns-complete":
+        restoreLatitudeNotationComplete();
+        break;
+      case "latitude-calibration-1-complete":
+        restoreLatitudeCalibrationOneComplete();
+        break;
+      case "latitude-complete":
+        restoreLatitudeComplete();
         break;
       default:
         beginOpening();
@@ -2154,7 +2867,8 @@
       .filter((task) => taskOrder.indexOf(task.id) <= furthestIndex)
       .forEach((task) => {
         const isCurrent = progressData.currentTask === task.id
-          && progressData.checkpoint !== "position-test-complete";
+          && progressData.checkpoint !== "position-test-complete"
+          && progressData.checkpoint !== "latitude-complete";
         const isCompleted = progressData.completedTasks.includes(task.id);
         const hasSavedCheckpoint = Boolean(progressData.taskCheckpoints?.[task.id]);
         const row = document.createElement("button");
@@ -2236,6 +2950,123 @@
     const submitButton = positionTestActions.querySelector('[data-position-action="submit-mapping"]');
     if (submitButton) {
       submitButton.disabled = !(positionTestState.mapping.north && positionTestState.mapping.east);
+    }
+  });
+
+  latitudeIntroStart.addEventListener("click", () => {
+    void startLatitudeTask();
+  });
+
+  function handleLatitudeLineSelection(latitude) {
+    if (latitudeTaskState.phase === "equator-question") {
+      if (latitude !== 0) {
+        setLatitudeCopy({
+          prompt: "你认为哪条纬线适合作为纬度的0度线？",
+          feedback: "再看看，哪条纬线正好环绕地球的中间，并且是最长的纬线圈？",
+        });
+        return;
+      }
+
+      latitudeTaskState.phase = "equator-confirmed";
+      latitudeTaskState.equatorFound = true;
+      setLatitudeLineInteraction(false);
+      getLatitudeLineGroup(0)?.classList.add("is-equator");
+      setLatitudeCopy({
+        feedback: "这条纬线正好环绕地球的中间，而且是最长的纬线圈。",
+      });
+      setLatitudeActions([{ label: "继续", action: "confirm-equator" }]);
+      return;
+    }
+
+    if (latitudeTaskState.phase !== "calibration-1") return;
+    if (latitude !== -40) {
+      latitudeTaskState.calibration1Errors += 1;
+      setLatitudeCopy({
+        prompt: "校准1：请找到 40°S。",
+        feedback: latitudeTaskState.calibration1Errors === 1
+          ? "再看看它在赤道的哪一边。"
+          : "赤道以北是北纬N，赤道以南是南纬S。",
+      });
+      return;
+    }
+
+    latitudeTaskState.phase = "calibration-1-complete";
+    latitudeTaskState.calibration1Complete = true;
+    setLatitudeLineInteraction(false);
+    getLatitudeLineGroup(-40)?.classList.add("is-calibration-target");
+    showLatitudeDegree(-40, "ns");
+    setLatitudeCopy({ feedback: "40°S，定位匹配。" });
+    updateCheckpoint("latitude-calibration-1-complete");
+    window.setTimeout(startLatitudeCalibrationTwo, 950);
+  }
+
+  latitudeTeachingLines.addEventListener("click", (event) => {
+    const hitArea = event.target.closest(".latitude-line-hit");
+    if (!hitArea) return;
+    const latitude = Number(hitArea.closest(".latitude-line-group")?.dataset.latitude);
+    if (Number.isFinite(latitude)) handleLatitudeLineSelection(latitude);
+  });
+
+  latitudeTeachingLines.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const group = event.target.closest(".latitude-line-group.is-interactive");
+    if (!group) return;
+    event.preventDefault();
+    const latitude = Number(group.dataset.latitude);
+    if (Number.isFinite(latitude)) handleLatitudeLineSelection(latitude);
+  });
+
+  latitudeActions.addEventListener("click", (event) => {
+    const actionButton = event.target.closest("[data-latitude-action]");
+    if (!actionButton) return;
+    const action = actionButton.dataset.latitudeAction;
+
+    if (action === "confirm-equator" && latitudeTaskState.phase === "equator-confirmed") {
+      setLatitudeActions();
+      setLatitudeCopy({ feedback: "把它定为纬度的0°线。它叫赤道。" });
+      showLatitudeDegree(0);
+      updateCheckpoint("latitude-equator-found");
+      window.setTimeout(showLatitudeExplorationChoices, 950);
+      return;
+    }
+
+    if (action === "explore-north" || action === "explore-south") {
+      const direction = action === "explore-north" ? "north" : "south";
+      if (latitudeTaskState.phase === "choose-direction") {
+        void exploreLatitudeDirection(direction);
+      }
+      return;
+    }
+
+    if (action === "establish-ns" && latitudeTaskState.phase === "both-sides-question") {
+      void establishLatitudeNotation();
+      return;
+    }
+
+    if (action === "start-calibration-1" && latitudeTaskState.nsEstablished) {
+      startLatitudeCalibrationOne();
+      return;
+    }
+
+    if (latitudeTaskState.phase !== "calibration-2") return;
+    if (action === "answer-60-s") {
+      latitudeTaskState.calibration2Errors += 1;
+      setLatitudeCopy({
+        prompt: "这条纬线的纬度是多少？",
+        feedback: latitudeTaskState.calibration2Errors === 1
+          ? "再看看它在赤道的哪一边。"
+          : "赤道以北是北纬N，赤道以南是南纬S。",
+      });
+      return;
+    }
+
+    if (action === "answer-60-n") {
+      latitudeTaskState.phase = "calibration-2-complete";
+      latitudeTaskState.calibration2Complete = true;
+      showLatitudeDegree(60, "ns");
+      setLatitudeActions();
+      setLatitudeCopy({ feedback: "60°N，定位匹配。" });
+      window.setTimeout(() => void completeLatitudeTask(), 850);
     }
   });
 
