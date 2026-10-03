@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#020507" />
+    <title>未知信号</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23050b0e'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23b6ded9'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%237aa6a2' stroke-opacity='.5'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="experience" aria-label="未知空间">
+      <section id="scene" class="scene" aria-hidden="true">
+        <svg
+          class="world"
+          viewBox="0 0 1920 1080"
+          preserveAspectRatio="xMidYMid slice"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#010305" />
+              <stop offset="0.58" stop-color="#071015" />
+              <stop offset="1" stop-color="#0b171b" />
+            </linearGradient>
+            <radialGradient id="distance" cx="52%" cy="62%" r="58%">
+              <stop offset="0" stop-color="#153039" stop-opacity="0.3" />
+              <stop offset="0.52" stop-color="#071217" stop-opacity="0.1" />
+              <stop offset="1" stop-color="#010305" stop-opacity="0" />
+            </radialGradient>
+            <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#1b5163" />
+              <stop offset="0.18" stop-color="#123845" />
+              <stop offset="0.62" stop-color="#0a202a" />
+              <stop offset="1" stop-color="#041015" />
+            </linearGradient>
+            <linearGradient id="trackSoft" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#b7e8e5" stop-opacity="0.13" />
+              <stop offset="0.52" stop-color="#98d9d6" stop-opacity="0.78" />
+              <stop offset="1" stop-color="#6faead" stop-opacity="0.15" />
+            </linearGradient>
+            <filter id="trackGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="horizonGlow" x="-20%" y="-200%" width="140%" height="500%">
+              <feGaussianBlur stdDeviation="10" />
+            </filter>
+          </defs>
+
+          <rect width="1920" height="1080" fill="url(#sky)" />
+          <rect width="1920" height="1080" fill="url(#distance)" />
+
+          <g id="sphereNetwork" class="light-tracks sphere-network" fill="none" stroke-linecap="round">
+            <g id="latitudeTracks" class="sphere-network__latitudes"></g>
+            <g id="longitudeTracks" class="sphere-network__longitudes"></g>
+          </g>
+
+          <ellipse
+            class="horizon-haze"
+            cx="960"
+            cy="1190"
+            rx="1550"
+            ry="570"
+            fill="none"
+            stroke="#8bc0be"
+            stroke-opacity="0.12"
+            stroke-width="11"
+            filter="url(#horizonGlow)"
+          />
+          <path
+            class="ground"
+            d="M -170 916 C 430 759, 1390 759, 2090 918 L 2090 1210 L -170 1210 Z"
+            fill="url(#ground)"
+          />
+          <path
+            class="ground-rim"
+            d="M -170 916 C 430 759, 1390 759, 2090 918"
+            fill="none"
+            stroke="#72b8cb"
+            stroke-opacity="0.26"
+            stroke-width="2"
+          />
+          <path
+            class="ground-depth"
+            d="M 180 1008 C 650 884, 1345 883, 1780 1005"
+            fill="none"
+            stroke="#6f9693"
+            stroke-opacity="0.055"
+            stroke-width="2"
+          />
+
+          <g id="positionTestLayer" class="position-test-point" aria-hidden="true">
+            <circle class="position-test-point__halo" r="22" />
+            <circle class="position-test-point__ring" r="10" />
+            <circle class="position-test-point__core" r="4.5" />
+          </g>
+        </svg>
+
+        <div class="vignette" aria-hidden="true"></div>
+        <div class="recovery-shade" aria-hidden="true"></div>
+
+        <button id="soundToggle" class="sound-toggle" type="button" aria-label="声音已关闭" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4.5 9.4h3.2l4-3.2v11.6l-4-3.2H4.5z" />
+            <path class="sound-wave" d="M15 9.2c.8.8 1.2 1.7 1.2 2.8s-.4 2-1.2 2.8" />
+            <path class="sound-slash" d="M5 4.7 19 19.3" />
+          </svg>
+        </button>
+
+        <p id="narration" class="narration">这里……好像不是普通的地面。</p>
+
+        <button id="signal" class="signal" type="button" aria-label="查看微弱信号">
+          <span class="signal__ring signal__ring--outer"></span>
+          <span class="signal__ring signal__ring--inner"></span>
+          <span class="signal__core"></span>
+        </button>
+
+        <div id="signalGuide" class="signal-guide" aria-hidden="true">
+          <p id="signalGuideText">咦？这里有个光点，点一下看看？</p>
+        </div>
+
+        <div id="device" class="device" aria-live="polite">
+          <button id="deviceDock" class="device-dock" type="button" aria-label="打开返航定位器" aria-expanded="false">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <rect x="7" y="5" width="18" height="22" rx="5" />
+              <path d="M11 10h10M11 14h7" />
+              <circle cx="20.5" cy="21.5" r="1.7" />
+            </svg>
+          </button>
+
+          <section id="devicePanel" class="device-panel" aria-label="返航定位器状态">
+            <div class="device-panel__hardware" aria-hidden="true">
+              <i></i><i></i><i></i><i></i>
+            </div>
+            <div class="device-panel__header">
+              <div>
+                <span class="device-panel__signal" aria-hidden="true"></span>
+                <h1>返航定位器</h1>
+              </div>
+              <button id="deviceClose" class="device-close" type="button" aria-label="收起返航定位器">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg>
+              </button>
+            </div>
+            <dl class="device-readout">
+              <div><dt>目的地</dt><dd>珠海</dd></div>
+              <div id="deviceNetworkRow" hidden><dt>线网识别</dt><dd id="deviceNetworkValue">经线、纬线</dd></div>
+              <div><dt>南北位置</dt><dd id="deviceNorthValue">无法识别</dd></div>
+              <div><dt>东西位置</dt><dd id="deviceEastValue">无法识别</dd></div>
+              <div id="deviceSystemRow" class="device-readout__fault"><dt>定位系统</dt><dd id="deviceSystemValue">损坏</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <div id="taskPrompt" class="task-prompt">
+          <p id="taskTitle">任务一：调查这个网格是由什么样的线组成的？</p>
+          <p id="taskAction" class="task-prompt__action">任意点击一条你想了解的线。</p>
+          <button id="combinedObserve" class="combined-observe" type="button">一起观察</button>
+        </div>
+        <p id="taskReminder" class="task-reminder">任务一：调查这个网格中的线</p>
+
+        <div id="investigationShade" class="investigation-shade" aria-hidden="true"></div>
+
+        <p id="investigationFeedback" class="investigation-feedback" aria-live="polite"></p>
+
+        <aside id="scanRecords" class="scan-records" aria-label="调查记录" aria-live="polite"></aside>
+
+        <section id="scanStage" class="scan-stage" aria-hidden="true" aria-label="线条扫描">
+          <svg id="scanGlobe" class="scan-globe" viewBox="0 0 500 500" aria-hidden="true">
+            <defs>
+              <radialGradient id="scanSphereFill" cx="42%" cy="36%" r="65%">
+                <stop offset="0" stop-color="#ffe16e" stop-opacity="0.11" />
+                <stop offset="0.7" stop-color="#d9a83f" stop-opacity="0.035" />
+                <stop offset="1" stop-color="#2a1d07" stop-opacity="0" />
+              </radialGradient>
+              <filter id="scanGlow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <path id="scanSphereShell" class="scan-globe__body" />
+            <g id="scanContext" class="scan-globe__context"></g>
+            <g id="scanDrawing" class="scan-globe__drawing"></g>
+          </svg>
+          <p id="scanResult" class="scan-result"></p>
+          <button id="scanContinue" class="observation-continue" type="button">我看清楚了</button>
+        </section>
+
+        <section id="comparisonStage" class="comparison-stage" aria-hidden="true">
+          <div class="comparison-forms" aria-hidden="true">
+            <figure>
+              <svg id="comparisonLatitude" viewBox="0 0 500 500"></svg>
+              <figcaption>闭合圆圈</figcaption>
+            </figure>
+            <figure>
+              <svg id="comparisonLongitude" viewBox="0 0 500 500"></svg>
+              <figcaption>连接南北两极的半圆弧</figcaption>
+            </figure>
+          </div>
+          <p class="comparison-question">这两种线的形状一样吗？</p>
+          <div class="comparison-actions">
+            <button type="button" data-answer="same">一样</button>
+            <button type="button" data-answer="different">不一样</button>
+          </div>
+          <p id="comparisonFeedback" class="comparison-feedback" aria-live="polite"></p>
+        </section>
+
+        <section id="namingStage" class="naming-stage" aria-hidden="true" aria-live="polite">
+          <p id="namingObservation" class="naming-observation"></p>
+          <p id="namingTitle" class="naming-title"></p>
+          <p id="namingNote" class="naming-note"></p>
+          <button id="namingContinue" class="observation-continue naming-continue" type="button">继续</button>
+        </section>
+
+        <section id="positionTestStage" class="position-test" aria-hidden="true">
+          <p class="position-test__kicker">定位测试</p>
+          <p id="positionTestLead" class="position-test__lead"></p>
+          <p id="positionTestPrompt" class="position-test__prompt" aria-live="polite"></p>
+
+          <div id="positionMapping" class="position-mapping" hidden>
+            <p>根据刚才的测试，完成位置与线的对应。</p>
+            <div class="position-mapping__row" data-mapping-row="north">
+              <span>南北位置</span>
+              <span class="position-mapping__arrow" aria-hidden="true">→</span>
+              <div class="position-mapping__choices">
+                <button type="button" data-map-direction="north" data-map-value="longitude" aria-pressed="false">经线</button>
+                <button type="button" data-map-direction="north" data-map-value="latitude" aria-pressed="false">纬线</button>
+              </div>
+            </div>
+            <div class="position-mapping__row" data-mapping-row="east">
+              <span>东西位置</span>
+              <span class="position-mapping__arrow" aria-hidden="true">→</span>
+              <div class="position-mapping__choices">
+                <button type="button" data-map-direction="east" data-map-value="longitude" aria-pressed="false">经线</button>
+                <button type="button" data-map-direction="east" data-map-value="latitude" aria-pressed="false">纬线</button>
+              </div>
+            </div>
+          </div>
+
+          <p id="positionTestFeedback" class="position-test__feedback" aria-live="polite"></p>
+          <div id="positionTestActions" class="position-test__actions"></div>
+        </section>
+      </section>
+
+      <div id="intro" class="intro" aria-live="polite" aria-atomic="true">
+        <p id="introMessage" class="intro__message"></p>
+      </div>
+
+      <button
+        id="progressToggle"
+        class="progress-toggle is-attention"
+        type="button"
+        aria-label="打开探索进度"
+        aria-expanded="false"
+        aria-controls="progressPanel"
+      >
+        <span>SKIP</span>
+        <small>略过</small>
+      </button>
+
+      <div id="progressOverlay" class="progress-overlay" aria-hidden="true">
+        <aside id="progressPanel" class="progress-panel" aria-label="探索进度">
+          <header class="progress-panel__header">
+            <h2>探索进度</h2>
+            <button id="progressClose" class="progress-panel__close" type="button" aria-label="关闭探索进度">×</button>
+          </header>
+          <p id="progressCurrent" class="progress-panel__current"></p>
+          <div id="progressContinue" class="progress-panel__continue"></div>
+          <div id="progressTaskList" class="progress-task-list"></div>
+          <footer class="progress-panel__footer">
+            <button id="progressReset" class="progress-reset" type="button">重新开始本次体验</button>
+          </footer>
+          <div id="progressResetConfirm" class="progress-reset-confirm" hidden>
+            <p>是否清除本机进度，并从开场重新开始？</p>
+            <div>
+              <button type="button" data-reset-action="cancel">取消</button>
+              <button type="button" data-reset-action="confirm">确认重新开始</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
