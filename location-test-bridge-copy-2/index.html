@@ -322,6 +322,13 @@
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
+                <filter id="longitudeCandidateGlow" filterUnits="userSpaceOnUse" x="0" y="0" width="620" height="620">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
               </defs>
               <path id="longitudeSphereShell" class="longitude-globe__shell" />
               <g id="longitudeTeachingLines" class="longitude-globe__lines"></g>

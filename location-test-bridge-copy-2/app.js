@@ -1233,18 +1233,57 @@
     await wait(1000);
   }
 
-  function createCombinedScanGroup(type, value) {
+  function createCombinedLongitudePath(value, sharedPoles) {
+    const points = [];
+    for (let step = 0; step <= 180; step += 1) {
+      const latitude = -90 + step;
+      if (latitude <= -88) {
+        points.push(sharedPoles.south);
+      } else if (latitude >= 88) {
+        points.push(sharedPoles.north);
+      } else {
+        points.push(projectOrthographicPoint(
+          getLongitudePoint(value, latitude, combinedProjectionModel.radius),
+          combinedProjectionModel,
+        ));
+      }
+    }
+    points[0] = sharedPoles.south;
+    points[points.length - 1] = sharedPoles.north;
+    const pathData = points
+      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+      .join(" ");
+    return createSvgElement("path", {
+      class: "scan-combined-line scan-combined-line--longitude",
+      d: pathData,
+    });
+  }
+
+  function createCombinedPoleMarker(point) {
+    return createSvgElement("circle", {
+      class: "scan-combined-pole",
+      cx: point.x.toFixed(2),
+      cy: point.y.toFixed(2),
+      r: 3.2,
+    });
+  }
+
+  function createCombinedScanGroup(type, value, sharedPoles = null) {
     const group = createSvgElement("g", {
       class: "scan-combined-group",
       "data-geometry-type": type,
       "data-value": value,
     });
-    createProjectionPaths(
-      type,
-      value,
-      `scan-combined-line scan-combined-line--${type}`,
-      combinedProjectionModel,
-    ).forEach((path) => group.append(path));
+    if (type === "longitude") {
+      group.append(createCombinedLongitudePath(value, sharedPoles));
+    } else {
+      createProjectionPaths(
+        type,
+        value,
+        `scan-combined-line scan-combined-line--${type}`,
+        combinedProjectionModel,
+      ).forEach((path) => group.append(path));
+    }
     scanDrawing.append(group);
     return group;
   }
@@ -1255,10 +1294,25 @@
     scanSphereShell.setAttribute("d", createSphereShellPath("latitude", combinedProjectionModel));
     scanSphereShell.dataset.projection = "combined";
 
+    const sharedPoles = {
+      north: projectOrthographicPoint(
+        getLongitudePoint(0, 90, combinedProjectionModel.radius),
+        combinedProjectionModel,
+      ),
+      south: projectOrthographicPoint(
+        getLongitudePoint(0, -90, combinedProjectionModel.radius),
+        combinedProjectionModel,
+      ),
+    };
+
     const latitudeGroups = sphereModel.latitudeValues
       .map((value) => createCombinedScanGroup("latitude", value));
     const longitudeGroups = combinedLongitudeValues
-      .map((value) => createCombinedScanGroup("longitude", value));
+      .map((value) => createCombinedScanGroup("longitude", value, sharedPoles));
+    scanDrawing.append(
+      createCombinedPoleMarker(sharedPoles.north),
+      createCombinedPoleMarker(sharedPoles.south),
+    );
     return { latitudeGroups, longitudeGroups };
   }
 
@@ -1468,6 +1522,7 @@
         "is-interactive",
         "is-equator",
         "is-calibration-target",
+        "is-calibration-pulse",
         "is-pair-flash",
       );
     });
@@ -2314,7 +2369,7 @@
     setLatitudeStageMode("calibration-one");
     showCompleteLatitudeNotation();
     latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
-      group.classList.remove("is-calibration-target");
+      group.classList.remove("is-calibration-target", "is-calibration-pulse");
     });
     setLatitudeLineInteraction(false);
     setLatitudeCopy();
@@ -2334,13 +2389,13 @@
     hideLatitudeDegree(60);
     setLatitudeLineInteraction(false);
     latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
-      group.classList.remove("is-calibration-target");
+      group.classList.remove("is-calibration-target", "is-calibration-pulse");
     });
     getLatitudeLineGroup(0)?.classList.remove("is-equator");
-    getLatitudeLineGroup(60)?.classList.add("is-calibration-target");
+    getLatitudeLineGroup(60)?.classList.add("is-calibration-target", "is-calibration-pulse");
     setLatitudeCopy();
     setLatitudeActions();
-    const didFinish = await typeLatitudeQuestion("这条纬线的纬度是多少？");
+    const didFinish = await typeLatitudeQuestion("图中高亮的这条纬线的纬度是多少？");
     if (didFinish && latitudeTaskState.phase === "calibration-2") {
       setLatitudeActions([
         { label: "60°N", action: "answer-60-n" },
@@ -2377,7 +2432,7 @@
     latitudeTaskState.calibration2Complete = true;
     setLatitudeLineInteraction(false);
     latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
-      group.classList.remove("is-calibration-target");
+      group.classList.remove("is-calibration-target", "is-calibration-pulse");
     });
     getLatitudeLineGroup(0)?.classList.add("is-equator");
     showLatitudeDegree(0);
@@ -2498,6 +2553,20 @@
     longitudeFeedback.textContent = feedback;
   }
 
+  function setLongitudeNotationFeedback(count) {
+    const explanations = [
+      ["east", "本初子午线以东，叫东经，用 E 表示。"],
+      ["west", "本初子午线以西，叫西经，用 W 表示。"],
+      ["shared", "注意：0°和180°没有东西经之分。"],
+    ];
+    longitudeFeedback.replaceChildren(...explanations.slice(0, count).map(([side, message]) => {
+      const line = document.createElement("span");
+      line.className = `longitude-notation__${side}`;
+      line.textContent = message;
+      return line;
+    }));
+  }
+
   async function typeLongitudeQuestion(question) {
     const sequence = ++longitudeQuestionSequence;
     longitudePrompt.textContent = "";
@@ -2527,6 +2596,7 @@
       "is-calibration-one",
       "is-calibration-two",
       "is-summary-layout",
+      "is-notation-layout",
       "is-draggable",
     );
     if (mode === "prime") longitudeStage.classList.add("is-prime-layout");
@@ -2539,6 +2609,7 @@
       );
     }
     if (mode === "summary") longitudeStage.classList.add("is-summary-layout");
+    if (mode === "notation") longitudeStage.classList.add("is-notation-layout");
   }
 
   function setLongitudeActions(actions = [], { immediate = false } = {}) {
@@ -2871,7 +2942,9 @@
         "is-interactive",
         "is-attempted",
         "is-prime",
+        "is-antimeridian-highlight",
         "is-calibration-target",
+        "is-calibration-pulse",
         "is-error-flash",
       );
     });
@@ -2942,6 +3015,7 @@
     showLongitudeDirection("east", notation);
     showLongitudeDirection("west", notation);
     showLongitudeLabel("shared", 180);
+    getLongitudeLineGroup(-180)?.classList.toggle("is-antimeridian-highlight", notation === "ew");
   }
 
   function setLongitudeMarker(longitude) {
@@ -3102,6 +3176,9 @@
           && Math.abs(longitude) >= longitudeDegreeValues[nextDegreeIndex]
         ) {
           showLongitudeLabel(direction, longitudeDegreeValues[nextDegreeIndex], notation);
+          if (notation === "ew" && longitudeDegreeValues[nextDegreeIndex] === 180) {
+            getLongitudeLineGroup(-180)?.classList.add("is-antimeridian-highlight");
+          }
           nextDegreeIndex += 1;
         }
 
@@ -3189,7 +3266,7 @@
 
   async function establishLongitudeNotation() {
     longitudeTaskState.phase = "establishing-ew";
-    setLongitudeStageMode();
+    setLongitudeStageMode("notation");
     setLongitudeActions();
     longitudeTeachingModel.rotation.y = getLongitudePrimeViewRotation();
     updateLongitudeTeachingGeometry();
@@ -3198,20 +3275,24 @@
     const directionQuestion = "东西两边都有相同的度数，怎样区分它们在本初子午线的哪一边？";
     setLongitudeCopy({
       prompt: directionQuestion,
-      feedback: "本初子午线以东，叫东经，用 E 表示。",
     });
+    setLongitudeNotationFeedback(1);
     await animateLongitudeDirection("east", { showMarker: false, notation: "ew" });
     await wait(500);
     await animateLongitudeReturn("east", { showMarker: false });
     await wait(650);
     setLongitudeCopy({
       prompt: directionQuestion,
-      feedback: "本初子午线以东，叫东经，用 E 表示。\n本初子午线以西，叫西经，用 W 表示。",
     });
+    setLongitudeNotationFeedback(2);
     await animateLongitudeDirection("west", { showMarker: false, notation: "ew" });
     await wait(500);
     await animateLongitudeReturn("west", { showMarker: false });
     showCompleteLongitudeNotation("ew");
+    setLongitudeCopy({
+      prompt: directionQuestion,
+    });
+    setLongitudeNotationFeedback(3);
     longitudeTaskState.ewEstablished = true;
     longitudeTaskState.phase = "ew-established";
     updateCheckpoint("longitude-ew-complete");
@@ -3220,6 +3301,7 @@
 
   function showLongitudeConclusion(immediateProcessAction = false) {
     longitudeTaskState.phase = "ew-conclusion";
+    setLongitudeStageMode();
     setLongitudeCopy({
       prompt: "经度从本初子午线的0°开始，向东、向西逐渐增大，到180°。",
     });
@@ -3263,9 +3345,9 @@
     showCompleteLongitudeNotation("ew");
     setLongitudeLineInteraction(false);
     longitudeTeachingLines.querySelectorAll(".longitude-line-group").forEach((group) => {
-      group.classList.remove("is-calibration-target");
+      group.classList.remove("is-calibration-target", "is-calibration-pulse");
     });
-    getLongitudeLineGroup(150)?.classList.add("is-calibration-target");
+    getLongitudeLineGroup(150)?.classList.add("is-calibration-target", "is-calibration-pulse");
     const targetLabel = getLongitudeDegreeLabel("east", 150);
     targetLabel?.classList.add("is-target-hidden");
     targetLabel?.setAttribute("aria-hidden", "true");
@@ -3280,10 +3362,10 @@
       }
     };
     if (animateQuestion) {
-      const didFinish = await typeLongitudeQuestion("这条经线的经度是多少？");
+      const didFinish = await typeLongitudeQuestion("图中高亮的这条经线的经度是多少？");
       if (didFinish) showAnswers();
     } else {
-      setLongitudeCopy({ prompt: "这条经线的经度是多少？" });
+      setLongitudeCopy({ prompt: "图中高亮的这条经线的经度是多少？" });
       showAnswers();
     }
   }
@@ -3295,7 +3377,7 @@
     setLongitudeLineInteraction(false);
     longitudeTeachingModel.rotation.y = getLongitudePrimeViewRotation();
     longitudeTeachingLines.querySelectorAll(".longitude-line-group").forEach((group) => {
-      group.classList.remove("is-calibration-target");
+      group.classList.remove("is-calibration-target", "is-calibration-pulse");
     });
     updateLongitudeTeachingGeometry();
     showCompleteLongitudeNotation("ew");
@@ -3318,6 +3400,7 @@
     longitudeStage.setAttribute("aria-hidden", "true");
     await wait(700);
     updateLongitudeDevice(true);
+    showFinalLocationKnowledgeSummary();
     highlightDeviceUpdates(["east", "system"]);
     completionDeviceReviewType = "longitude";
     device.classList.add("is-found", "is-position-alert");
@@ -3388,13 +3471,14 @@
   function restoreLongitudeNotationComplete() {
     loadLongitudeTaskState();
     activateLongitudeTeachingStage();
+    setLongitudeStageMode("notation");
     establishPrimeVisual();
     showCompleteLongitudeNotation("ew");
     longitudeTaskState.phase = "ew-established";
     setLongitudeCopy({
       prompt: "东西两边都有相同的度数，怎样区分它们在本初子午线的哪一边？",
-      feedback: "本初子午线以东，叫东经，用 E 表示。\n本初子午线以西，叫西经，用 W 表示。",
     });
+    setLongitudeNotationFeedback(3);
     setLongitudeActions(
       [{ label: "结论", action: "show-longitude-conclusion" }],
       { immediate: true },
@@ -3419,6 +3503,7 @@
     prepareCompletedTaskOneWorld();
     longitudeTaskState.phase = "complete";
     updateLongitudeDevice(true);
+    showFinalLocationKnowledgeSummary();
     highlightDeviceUpdates(["east", "system"]);
     completionDeviceReviewType = "longitude";
     device.classList.add("is-found", "is-position-alert");
@@ -3538,6 +3623,46 @@
         label.textContent = knowledgeLabels[recordType];
       }
     });
+  }
+
+  function showFinalLocationKnowledgeSummary() {
+    const summaryItems = [
+      {
+        title: "纬度",
+        lines: [
+          "从赤道的0°开始，",
+          "向北、向南逐渐增大，到90°，",
+          "分别记北纬N、南纬S",
+        ],
+      },
+      {
+        title: "经度",
+        lines: [
+          "从本初子午线的0°开始，",
+          "向东、向西逐渐增大，到180°，",
+          "分别记东经E、西经W",
+        ],
+      },
+    ];
+    scanRecords.replaceChildren();
+    scanRecords.classList.add("is-final-summary");
+    relationshipRecordResult = null;
+    summaryItems.forEach(({ title, lines }) => {
+      const block = document.createElement("section");
+      const label = document.createElement("small");
+      block.className = "final-knowledge-block";
+      label.textContent = title;
+      block.append(label);
+      lines.forEach((line) => {
+        const value = document.createElement("span");
+        value.className = "final-knowledge-block__line";
+        value.textContent = line;
+        block.append(value);
+      });
+      scanRecords.append(block);
+    });
+    taskReminder.textContent = "已完成：纬度定位南北 · 经度定位东西";
+    taskReminder.classList.add("is-visible");
   }
 
   async function addScanRecord(type) {
@@ -3948,6 +4073,7 @@
   }
 
   function restoreScanRecords(history, useFinalRelationshipText = false) {
+    scanRecords.classList.remove("is-final-summary");
     scanRecords.replaceChildren();
     scanHistory.length = 0;
     scannedTypes.clear();
@@ -4574,7 +4700,7 @@
     if (action === "answer-60-s") {
       latitudeTaskState.calibration2Errors += 1;
       setLatitudeCopy({
-        prompt: "这条纬线的纬度是多少？",
+        prompt: "图中高亮的这条纬线的纬度是多少？",
         feedback: latitudeTaskState.calibration2Errors === 1
           ? "高亮的纬线在赤道以北，再判断应该用N还是S。"
           : "赤道以北是北纬，用N表示。",
@@ -4585,10 +4711,11 @@
     if (action === "answer-60-n") {
       latitudeTaskState.phase = "calibration-2-complete";
       latitudeTaskState.calibration2Complete = true;
+      getLatitudeLineGroup(60)?.classList.remove("is-calibration-pulse");
       showLatitudeDegree(60, "ns");
       setLatitudeActions();
       setLatitudeCopy({
-        prompt: "这条纬线的纬度是多少？",
+        prompt: "图中高亮的这条纬线的纬度是多少？",
         feedback: "判断正确，这是60°N。",
       });
       window.setTimeout(() => showLatitudeCalibrationSummary(), 1750);
@@ -4779,7 +4906,7 @@
     if (action === "answer-150-w") {
       longitudeTaskState.calibration2Errors += 1;
       setLongitudeCopy({
-        prompt: "这条经线的经度是多少？",
+        prompt: "图中高亮的这条经线的经度是多少？",
         feedback: longitudeTaskState.calibration2Errors === 1
           ? "高亮的经线在本初子午线以东，再判断应该用E还是W。"
           : "本初子午线以东是东经，用E表示。",
@@ -4789,13 +4916,14 @@
     if (action === "answer-150-e") {
       longitudeTaskState.phase = "longitude-calibration-2-complete";
       longitudeTaskState.calibration2Complete = true;
+      getLongitudeLineGroup(150)?.classList.remove("is-calibration-pulse");
       const targetLabel = getLongitudeDegreeLabel("east", 150);
       targetLabel?.classList.remove("is-target-hidden");
       targetLabel?.classList.add("is-visible");
       targetLabel?.setAttribute("aria-hidden", "false");
       setLongitudeActions();
       setLongitudeCopy({
-        prompt: "这条经线的经度是多少？",
+        prompt: "图中高亮的这条经线的经度是多少？",
         feedback: "判断正确，这是150°E。",
       });
       window.setTimeout(() => showLongitudeCalibrationSummary(), 1750);

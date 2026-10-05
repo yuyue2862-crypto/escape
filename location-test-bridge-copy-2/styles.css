@@ -1043,6 +1043,34 @@ button:focus-visible {
   pointer-events: none;
 }
 
+.scan-records.is-final-summary {
+  width: clamp(25rem, 32vw, 32rem);
+  gap: clamp(1rem, 1.6vh, 1.35rem);
+}
+
+.final-knowledge-block {
+  margin: 0;
+  color: #9be8ff;
+  text-shadow: 0 0 10px rgba(116, 187, 180, 0.12);
+}
+
+.final-knowledge-block small {
+  display: block;
+  margin-bottom: 0.22rem;
+  color: rgba(155, 232, 255, 0.58);
+  font-size: clamp(16px, 1.04vw, 20px);
+  letter-spacing: 0.12em;
+}
+
+.final-knowledge-block__line {
+  display: block;
+  color: #9be8ff;
+  font-size: var(--font-record-label);
+  line-height: 1.62;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
 .scan-record {
   margin: 0;
   color: rgba(155, 232, 255, 0.9);
@@ -1215,6 +1243,12 @@ button:focus-visible {
 
 .scan-combined-line--longitude {
   stroke: rgba(255, 227, 116, 0.66);
+}
+
+.scan-combined-pole {
+  fill: rgba(255, 229, 123, 0.9);
+  filter: url(#scanGlow);
+  pointer-events: none;
 }
 
 .scan-line--back,
@@ -1961,6 +1995,23 @@ button:focus-visible {
   filter: url(#latitudeGlow);
 }
 
+.latitude-line-group.is-calibration-pulse .latitude-line {
+  animation: latitude-calibration-pulse 1.45s ease-in-out infinite;
+}
+
+@keyframes latitude-calibration-pulse {
+  0%, 100% {
+    stroke: rgba(255, 235, 157, 1);
+    stroke-opacity: 1;
+    filter: url(#latitudeGlow) drop-shadow(0 0 6px rgba(255, 210, 92, 0.42));
+  }
+  50% {
+    stroke: rgba(255, 218, 122, 0.86);
+    stroke-opacity: 0.76;
+    filter: url(#latitudeGlow) drop-shadow(0 0 2px rgba(255, 210, 92, 0.16));
+  }
+}
+
 .latitude-line-group.is-pair-flash .latitude-line {
   animation: latitude-pair-flash 1.2s ease-in-out 1;
 }
@@ -2484,14 +2535,14 @@ button:focus-visible {
 .longitude-line-group.is-interactive:focus-visible .longitude-line {
   stroke: rgba(255, 224, 127, 0.9);
   stroke-width: 2.35;
-  filter: url(#longitudeGlow);
+  filter: url(#longitudeCandidateGlow);
 }
 
 .longitude-line-group.is-attempted .longitude-line {
   stroke: rgba(255, 218, 113, 0.84);
   stroke-width: 2.25;
   opacity: 1;
-  filter: url(#longitudeGlow);
+  filter: url(#longitudeCandidateGlow);
 }
 
 .longitude-line-group.is-prime .longitude-line {
@@ -2499,6 +2550,13 @@ button:focus-visible {
   stroke-width: 5.2;
   opacity: 1;
   filter: url(#longitudeGlow) drop-shadow(0 0 7px rgba(255, 204, 70, 0.9));
+}
+
+.longitude-line-group.is-antimeridian-highlight .longitude-line {
+  stroke: #fff0a3;
+  stroke-width: 5.2;
+  opacity: 1;
+  filter: url(#longitudeCandidateGlow) drop-shadow(0 0 7px rgba(255, 204, 70, 0.9));
 }
 
 .longitude-stage.is-prime-layout .longitude-line-group:not(.is-prime) .longitude-line {
@@ -2516,6 +2574,23 @@ button:focus-visible {
   stroke: rgba(255, 239, 166, 1);
   stroke-width: 4.25;
   filter: url(#longitudeGlow);
+}
+
+.longitude-line-group.is-calibration-pulse .longitude-line {
+  animation: longitude-calibration-pulse 1.45s ease-in-out infinite;
+}
+
+@keyframes longitude-calibration-pulse {
+  0%, 100% {
+    stroke: rgba(255, 235, 157, 1);
+    stroke-opacity: 1;
+    filter: url(#longitudeGlow) drop-shadow(0 0 6px rgba(255, 210, 92, 0.42));
+  }
+  50% {
+    stroke: rgba(255, 218, 122, 0.86);
+    stroke-opacity: 0.76;
+    filter: url(#longitudeGlow) drop-shadow(0 0 2px rgba(255, 210, 92, 0.16));
+  }
 }
 
 .longitude-line-group.is-error-flash .longitude-line {
@@ -2696,6 +2771,39 @@ button:focus-visible {
   --active-teaching-globe-radius: var(--teaching-globe-calibration-visual-radius);
 }
 
+.longitude-stage.is-notation-layout .longitude-stage__feedback {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  pointer-events: none;
+}
+
+.longitude-stage.is-notation-layout .longitude-stage__feedback span {
+  position: absolute;
+  top: var(--teaching-globe-center-y);
+  width: var(--teaching-side-width);
+  transform: translateY(-50%);
+}
+
+.longitude-stage.is-notation-layout .longitude-notation__east {
+  left: calc(50% + var(--active-teaching-globe-radius) + var(--teaching-side-gap) + 2em);
+}
+
+.longitude-stage.is-notation-layout .longitude-notation__west {
+  right: calc(50% + var(--active-teaching-globe-radius) + var(--teaching-side-gap) + 2em);
+  text-align: right;
+}
+
+.longitude-stage.is-notation-layout .longitude-stage__feedback .longitude-notation__shared {
+  top: calc(var(--teaching-globe-center-y) + var(--active-teaching-globe-radius) + 1rem);
+  left: 50%;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  text-align: center;
+  transform: translateX(-50%);
+}
+
 .latitude-stage__actions.is-process-actions,
 .longitude-stage__actions.is-process-actions {
   right: clamp(-8.2rem, -6.8vw, -5.5rem);
@@ -2828,6 +2936,20 @@ button:focus-visible {
 
   .longitude-stage__actions.is-teaching-actions button[data-longitude-action="explore-east"] {
     right: 0.5rem;
+  }
+
+  .longitude-stage.is-notation-layout .longitude-stage__feedback span:not(.longitude-notation__shared) {
+    width: max(5rem, calc(50vw - var(--active-teaching-globe-radius) - 1.5rem));
+  }
+
+  .longitude-stage.is-notation-layout .longitude-notation__east {
+    right: 0.75rem;
+    left: auto;
+  }
+
+  .longitude-stage.is-notation-layout .longitude-notation__west {
+    right: auto;
+    left: 0.75rem;
   }
 
   .comparison-stage {
