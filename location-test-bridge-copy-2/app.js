@@ -47,7 +47,9 @@
   const positionMapping = document.querySelector("#positionMapping");
   const deviceNetworkRow = document.querySelector("#deviceNetworkRow");
   const deviceNetworkValue = document.querySelector("#deviceNetworkValue");
+  const deviceNorthRow = document.querySelector("#deviceNorthRow");
   const deviceNorthValue = document.querySelector("#deviceNorthValue");
+  const deviceEastRow = document.querySelector("#deviceEastRow");
   const deviceEastValue = document.querySelector("#deviceEastValue");
   const deviceSystemRow = document.querySelector("#deviceSystemRow");
   const deviceSystemValue = document.querySelector("#deviceSystemValue");
@@ -90,7 +92,8 @@
   const longitudeTeachingMarker = document.querySelector("#longitudeTeachingMarker");
 
   const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-  const PROCESS_ACTION_DELAY = 1000;
+  const PROCESS_ACTION_DELAY = 2000;
+  const DEVICE_UPDATE_HIGHLIGHT_DURATION = 2600;
   const processActionRevealTokens = new WeakMap();
 
   function cancelProcessActionReveal(target) {
@@ -146,6 +149,8 @@
   };
 
   let deviceTimer = 0;
+  let deviceUpdateTimer = 0;
+  let completionDeviceReviewType = null;
   let taskHasStarted = false;
   let investigationPhase = "opening";
   let feedbackTimer = 0;
@@ -1696,6 +1701,21 @@
     });
   }
 
+  function highlightDeviceUpdates(fields = []) {
+    window.clearTimeout(deviceUpdateTimer);
+    const rows = {
+      north: deviceNorthRow,
+      east: deviceEastRow,
+      system: deviceSystemRow,
+    };
+    Object.values(rows).forEach((row) => row.classList.remove("is-recently-updated"));
+    fields.forEach((field) => rows[field]?.classList.add("is-recently-updated"));
+    if (fields.length === 0) return;
+    deviceUpdateTimer = window.setTimeout(() => {
+      Object.values(rows).forEach((row) => row.classList.remove("is-recently-updated"));
+    }, DEVICE_UPDATE_HIGHLIGHT_DURATION);
+  }
+
   function updatePositionDevice(isComplete) {
     deviceNetworkRow.hidden = false;
     deviceNetworkValue.textContent = "经线、纬线";
@@ -1708,6 +1728,7 @@
 
   function reviewPositionDevice(isComplete) {
     updatePositionDevice(isComplete);
+    highlightDeviceUpdates(isComplete ? ["north", "east", "system"] : []);
     device.classList.add("is-position-alert");
     positionDeviceReviewActive = true;
     setDeviceOpen(true);
@@ -2038,6 +2059,8 @@
     latitudeIntroTitle.textContent = "任务二：修复南北定位";
     latitudeIntroHint.textContent = "先找一找，哪一条纬线适合作为0°。";
     latitudeIntroHint.hidden = false;
+    latitudeIntroStart.textContent = "开始调查";
+    delete latitudeIntroStart.dataset.transitionAction;
     latitudeIntroStart.disabled = false;
     void revealProcessActionAfterDelay(latitudeIntroStart, () => {
       latitudeIntroStart.hidden = false;
@@ -2055,6 +2078,8 @@
     latitudeIntroStage.classList.add("is-visible");
     cancelProcessActionReveal(latitudeIntroStart);
     latitudeIntroStart.hidden = true;
+    latitudeIntroStart.textContent = "开始调查";
+    delete latitudeIntroStart.dataset.transitionAction;
 
     if (!animate) {
       showLatitudeIntroContent();
@@ -2236,14 +2261,19 @@
     latitudeTaskState.phase = "establishing-ns";
     setLatitudeStageMode();
     setLatitudeActions();
-    setLatitudeCopy({ prompt: "赤道以北，叫北纬，用 N 表示。" });
+    const directionQuestion = "两边都有相同的度数，如何分辨它们在赤道的哪一边？";
+    setLatitudeCopy({
+      prompt: directionQuestion,
+      feedback: "赤道以北，叫北纬，用 N 表示。",
+    });
     for (const degree of [20, 40, 60, 80, 90]) {
       showLatitudeDegree(degree, "ns");
       await wait(230);
     }
     await wait(850);
     setLatitudeCopy({
-      prompt: "赤道以北，叫北纬，用 N 表示。\n赤道以南，叫南纬，用 S 表示。",
+      prompt: directionQuestion,
+      feedback: "赤道以北，叫北纬，用 N 表示。\n赤道以南，叫南纬，用 S 表示。",
     });
     for (const degree of [20, 40, 60, 80, 90]) {
       showLatitudeDegree(-degree, "ns");
@@ -2251,11 +2281,20 @@
     }
     await wait(750);
     latitudeTaskState.nsEstablished = true;
+    latitudeTaskState.phase = "ns-established";
     updateCheckpoint("latitude-ns-complete");
+    setLatitudeActions([{ label: "结论", action: "show-latitude-conclusion" }]);
+  }
+
+  function showLatitudeConclusion(immediateProcessAction = false) {
+    latitudeTaskState.phase = "ns-conclusion";
     setLatitudeCopy({
       prompt: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
     });
-    setLatitudeActions([{ label: "进入定位校准", action: "start-calibration-1" }]);
+    setLatitudeActions(
+      [{ label: "进入定位校准", action: "start-calibration-1" }],
+      { immediate: immediateProcessAction },
+    );
   }
 
   function startLatitudeCalibrationOne() {
@@ -2309,7 +2348,16 @@
     latitudeIntroTitle.textContent = "";
     latitudeIntroHint.textContent = "";
     latitudeIntroHint.hidden = true;
+    latitudeIntroStart.textContent = "继续";
+    latitudeIntroStart.dataset.transitionAction = "longitude-intro";
+    latitudeIntroStart.disabled = false;
     latitudeIntroStart.hidden = true;
+    void revealProcessActionAfterDelay(latitudeIntroStart, () => {
+      latitudeIntroStart.hidden = false;
+    }, {
+      isCurrent: () => latitudeIntroStage.classList.contains("is-visible")
+        && latitudeIntroStart.dataset.transitionAction === "longitude-intro",
+    });
   }
 
   function showLatitudeCalibrationSummary(saveCheckpoint = true) {
@@ -2342,9 +2390,10 @@
     latitudeStage.setAttribute("aria-hidden", "true");
     await wait(700);
     updateLatitudeDevice();
+    highlightDeviceUpdates(["north"]);
+    completionDeviceReviewType = "latitude";
     device.classList.add("is-found", "is-position-alert");
     setDeviceOpen(true);
-    showLongitudeTaskIntro(true);
   }
 
   function restoreLatitudeStart() {
@@ -2386,11 +2435,13 @@
     showLatitudeDegree(0);
     showLatitudeDirection("north", "ns");
     showLatitudeDirection("south", "ns");
+    latitudeTaskState.phase = "ns-established";
     setLatitudeCopy({
-      prompt: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
+      prompt: "两边都有相同的度数，如何分辨它们在赤道的哪一边？",
+      feedback: "赤道以北，叫北纬，用 N 表示。\n赤道以南，叫南纬，用 S 表示。",
     });
     setLatitudeActions(
-      [{ label: "进入定位校准", action: "start-calibration-1" }],
+      [{ label: "结论", action: "show-latitude-conclusion" }],
       { immediate: true },
     );
   }
@@ -2413,9 +2464,10 @@
     prepareCompletedTaskOneWorld();
     latitudeTaskState.phase = "complete";
     updateLatitudeDevice();
+    highlightDeviceUpdates(["north"]);
+    completionDeviceReviewType = "latitude";
     device.classList.add("is-found", "is-position-alert");
     setDeviceOpen(true);
-    showLongitudeTaskIntro(false);
   }
 
   function canonicalLongitude(value) {
@@ -2677,7 +2729,10 @@
         );
         equatorHit.setAttribute("cx", equatorPoint.x.toFixed(2));
         equatorHit.setAttribute("cy", equatorPoint.y.toFixed(2));
-        const isFront = equatorPoint.depth <= 0;
+        const isFront = equatorPoint.depth <= 0.035;
+        const isEdge = Math.abs(equatorPoint.depth) < 0.22;
+        group.classList.toggle("is-edge-hit", isEdge);
+        equatorHit.setAttribute("r", isEdge ? "18" : "13");
         equatorHit.classList.toggle("is-back", !isFront);
         equatorHit.style.pointerEvents = group.classList.contains("is-interactive") && isFront
           ? "all"
@@ -3118,14 +3173,19 @@
     setLongitudeStageMode();
     setLongitudeActions();
     showCompleteLongitudeNotation("plain");
-    setLongitudeCopy({ prompt: "本初子午线以东，叫东经，用 E 表示。" });
+    const directionQuestion = "东西两边都有相同的度数，怎样区分它们在本初子午线的哪一边？";
+    setLongitudeCopy({
+      prompt: directionQuestion,
+      feedback: "本初子午线以东，叫东经，用 E 表示。",
+    });
     for (const degree of [30, 60, 90, 120, 150]) {
       showLongitudeLabel("east", degree, "ew");
       await wait(430);
     }
     await wait(950);
     setLongitudeCopy({
-      prompt: "本初子午线以东，叫东经，用 E 表示。\n本初子午线以西，叫西经，用 W 表示。",
+      prompt: directionQuestion,
+      feedback: "本初子午线以东，叫东经，用 E 表示。\n本初子午线以西，叫西经，用 W 表示。",
     });
     for (const degree of [30, 60, 90, 120, 150]) {
       showLongitudeLabel("west", degree, "ew");
@@ -3133,11 +3193,20 @@
     }
     await wait(850);
     longitudeTaskState.ewEstablished = true;
+    longitudeTaskState.phase = "ew-established";
     updateCheckpoint("longitude-ew-complete");
+    setLongitudeActions([{ label: "结论", action: "show-longitude-conclusion" }]);
+  }
+
+  function showLongitudeConclusion(immediateProcessAction = false) {
+    longitudeTaskState.phase = "ew-conclusion";
     setLongitudeCopy({
       prompt: "经度从本初子午线的0°开始，向东、向西逐渐增大，到180°。",
     });
-    setLongitudeActions([{ label: "进入定位校准", action: "start-longitude-calibration-1" }]);
+    setLongitudeActions(
+      [{ label: "进入定位校准", action: "start-longitude-calibration-1" }],
+      { immediate: immediateProcessAction },
+    );
   }
 
   function startLongitudeCalibrationOne(animateQuestion = true) {
@@ -3229,6 +3298,8 @@
     longitudeStage.setAttribute("aria-hidden", "true");
     await wait(700);
     updateLongitudeDevice(true);
+    highlightDeviceUpdates(["east", "system"]);
+    completionDeviceReviewType = "longitude";
     device.classList.add("is-found", "is-position-alert");
     setDeviceOpen(true);
   }
@@ -3299,12 +3370,13 @@
     activateLongitudeTeachingStage();
     establishPrimeVisual();
     showCompleteLongitudeNotation("ew");
-    longitudeTaskState.phase = "ew-complete";
+    longitudeTaskState.phase = "ew-established";
     setLongitudeCopy({
-      prompt: "经度从本初子午线的0°开始，向东、向西逐渐增大，到180°。",
+      prompt: "东西两边都有相同的度数，怎样区分它们在本初子午线的哪一边？",
+      feedback: "本初子午线以东，叫东经，用 E 表示。\n本初子午线以西，叫西经，用 W 表示。",
     });
     setLongitudeActions(
-      [{ label: "进入定位校准", action: "start-longitude-calibration-1" }],
+      [{ label: "结论", action: "show-longitude-conclusion" }],
       { immediate: true },
     );
   }
@@ -3327,6 +3399,8 @@
     prepareCompletedTaskOneWorld();
     longitudeTaskState.phase = "complete";
     updateLongitudeDevice(true);
+    highlightDeviceUpdates(["east", "system"]);
+    completionDeviceReviewType = "longitude";
     device.classList.add("is-found", "is-position-alert");
     setDeviceOpen(true);
   }
@@ -3748,7 +3822,7 @@
     deviceDock.setAttribute("aria-label", isOpen ? "返航定位器已打开" : "打开返航定位器");
 
     if (isOpen) {
-      if (!positionDeviceReviewActive) {
+      if (!positionDeviceReviewActive && !completionDeviceReviewType) {
         deviceTimer = window.setTimeout(() => setDeviceOpen(false), 6800);
       }
       return;
@@ -3760,6 +3834,14 @@
       const resolveDeviceReview = positionDeviceCloseResolver;
       positionDeviceCloseResolver = null;
       resolveDeviceReview?.();
+    }
+
+    if (completionDeviceReviewType) {
+      const completedType = completionDeviceReviewType;
+      completionDeviceReviewType = null;
+      device.classList.remove("is-position-alert");
+      if (completedType === "latitude") showLatitudeTaskEnding();
+      return;
     }
 
     if (!taskHasStarted) {
@@ -3871,10 +3953,12 @@
 
   function prepareRestoredWorld() {
     window.clearTimeout(deviceTimer);
+    window.clearTimeout(deviceUpdateTimer);
     window.clearTimeout(feedbackTimer);
     window.clearTimeout(taskPromptTimer);
     positionDeviceReviewActive = false;
     positionDeviceCloseResolver = null;
+    completionDeviceReviewType = null;
     taskHasStarted = true;
 
     scene.className = "scene is-recovering tracks-awake";
@@ -3896,6 +3980,7 @@
     deviceSystemValue.textContent = "损坏";
     deviceSystemRow.classList.add("device-readout__fault");
     deviceSystemRow.classList.remove("device-readout__ready");
+    highlightDeviceUpdates([]);
 
     taskPrompt.className = "task-prompt";
     cancelProcessActionReveal(combinedObserve);
@@ -4343,6 +4428,14 @@
   });
 
   latitudeIntroStart.addEventListener("click", () => {
+    if (latitudeIntroStart.dataset.transitionAction === "longitude-intro") {
+      cancelProcessActionReveal(latitudeIntroStart);
+      latitudeIntroStart.hidden = true;
+      latitudeIntroStart.disabled = true;
+      delete latitudeIntroStart.dataset.transitionAction;
+      void showLongitudeTaskIntro(true);
+      return;
+    }
     void startLatitudeTask();
   });
 
@@ -4438,6 +4531,12 @@
 
     if (action === "establish-ns" && latitudeTaskState.phase === "both-sides-question") {
       void establishLatitudeNotation();
+      return;
+    }
+
+    if (action === "show-latitude-conclusion" && latitudeTaskState.phase === "ns-established") {
+      setLatitudeActions();
+      showLatitudeConclusion();
       return;
     }
 
@@ -4638,6 +4737,11 @@
     }
     if (action === "establish-ew" && longitudeTaskState.phase === "both-sides-question") {
       void establishLongitudeNotation();
+      return;
+    }
+    if (action === "show-longitude-conclusion" && longitudeTaskState.phase === "ew-established") {
+      setLongitudeActions();
+      showLongitudeConclusion();
       return;
     }
     if (action === "start-longitude-calibration-1" && longitudeTaskState.ewEstablished) {

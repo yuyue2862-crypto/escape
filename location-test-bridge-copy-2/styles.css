@@ -7,8 +7,8 @@
   --ease-calm: cubic-bezier(0.22, 0.72, 0.24, 1);
   --font-opening: clamp(30px, 1.875vw, 36px);
   --font-classroom: clamp(24px, 1.46vw, 28px);
-  --font-device: 24px;
-  --font-record-label: 22px;
+  --font-device: clamp(18px, 1.25vw, 24px);
+  --font-record-label: clamp(17px, 1.15vw, 22px);
   --teaching-globe-size: min(74vh, 52rem, 92vw);
   --teaching-globe-calibration-size: min(68vh, 47rem, 90vw);
   --teaching-stage-inset: clamp(1rem, 2.4vh, 2rem);
@@ -22,6 +22,9 @@
   --process-button-min-height: 2.5rem;
   --process-button-padding: 0.42rem 0.95rem;
   --teaching-action-offset: clamp(7rem, 8vw, 8.5rem);
+  --teaching-side-left: clamp(1.2rem, 3vw, 4rem);
+  --teaching-side-width: clamp(12rem, 20vw, 24rem);
+  --teaching-answer-gap: clamp(0.55rem, 1.4vh, 1rem);
 }
 
 * {
@@ -847,6 +850,8 @@ button:focus-visible {
   min-height: 4.45rem;
   padding: 0.9rem 0.2rem;
   border-bottom: 1px solid rgba(55, 198, 244, 0.12);
+  border-radius: 0.35rem;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
 .device-readout > div[hidden],
@@ -877,6 +882,22 @@ button:focus-visible {
 
 .device-readout__fault dd {
   color: #d58a82;
+}
+
+.device-readout > div.is-recently-updated {
+  background: rgba(255, 214, 107, 0.075);
+  box-shadow: inset 0 0 0 1px rgba(255, 214, 107, 0.1);
+}
+
+.device-readout > div.is-recently-updated dt,
+.device-readout > div.is-recently-updated dd {
+  color: #ffd66b;
+  text-shadow: 0 0 12px rgba(255, 196, 67, 0.24);
+}
+
+.device-readout__fault.is-recently-updated dd {
+  color: #d58a82;
+  text-shadow: 0 0 10px rgba(213, 138, 130, 0.22);
 }
 
 .task-prompt {
@@ -1020,8 +1041,8 @@ button:focus-visible {
 
 .scan-record {
   margin: 0;
-  color: rgba(210, 231, 227, 0.86);
-  font-size: 22px;
+  color: rgba(155, 232, 255, 0.9);
+  font-size: var(--font-record-label);
   line-height: 1.5;
   letter-spacing: 0.08em;
   opacity: 0;
@@ -1032,16 +1053,16 @@ button:focus-visible {
 
 .scan-record small {
   display: block;
-  color: rgba(166, 197, 192, 0.62);
-  font-size: 20px;
+  color: rgba(155, 232, 255, 0.58);
+  font-size: clamp(16px, 1.04vw, 20px);
   letter-spacing: 0.12em;
 }
 
 .scan-record__result {
   display: block;
   min-height: 1.5em;
-  color: rgba(210, 231, 227, 0.86);
-  font-size: 22px;
+  color: #9be8ff;
+  font-size: var(--font-record-label);
   transition: color 0.3s ease, text-shadow 0.35s ease, opacity 0.3s ease;
 }
 
@@ -1061,8 +1082,8 @@ button:focus-visible {
 }
 
 .scan-record.is-emphasized .scan-record__result {
-  color: rgba(235, 247, 244, 1);
-  text-shadow: 0 0 8px rgba(146, 216, 208, 0.5), 0 0 18px rgba(99, 174, 166, 0.24);
+  color: #c7f4ff;
+  text-shadow: 0 0 8px rgba(119, 220, 244, 0.5), 0 0 18px rgba(67, 174, 207, 0.24);
 }
 
 @keyframes record-arrive {
@@ -2418,17 +2439,22 @@ button:focus-visible {
   stroke-width: 1.55;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
+  clip-path: url(#longitudeSphereClip);
   transition: stroke 0.25s ease, stroke-width 0.25s ease, filter 0.25s ease, opacity 0.25s ease;
 }
 
 .longitude-line-hit {
   fill: none;
   stroke: rgba(255, 255, 255, 0.001);
-  stroke-width: 20;
+  stroke-width: 28;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
   cursor: pointer;
+}
+
+.longitude-line-group.is-edge-hit .longitude-line-hit {
+  stroke-width: 34;
 }
 
 .longitude-line-hit-node {
@@ -2590,6 +2616,136 @@ button:focus-visible {
   border-color: rgba(177, 229, 220, 0.82);
   background: rgba(45, 83, 82, 0.9);
   box-shadow: 0 0 18px rgba(105, 192, 182, 0.16);
+}
+
+/* Tasks two and three share one responsive five-zone teaching layout:
+   title/question, left explanation, centered globe, lower answers, right process action. */
+.latitude-stage,
+.longitude-stage {
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.latitude-stage__kicker,
+.longitude-stage__kicker {
+  position: absolute;
+  z-index: 5;
+  top: var(--teaching-stage-inset);
+  left: 50%;
+  width: min(64rem, 86vw);
+  transform: translateX(-50%);
+}
+
+.latitude-stage__prompt,
+.longitude-stage__prompt,
+.latitude-stage.is-calibration-layout .latitude-stage__prompt,
+.longitude-stage.is-calibration-layout .longitude-stage__prompt {
+  position: absolute;
+  z-index: 5;
+  top: clamp(2.75rem, 5.7vh, 4.15rem);
+  left: 50%;
+  width: min(68rem, 82vw);
+  height: auto;
+  min-height: 1.9em;
+  margin: 0;
+  transform: translateX(-50%);
+}
+
+.latitude-stage__feedback,
+.longitude-stage__feedback,
+.latitude-stage.is-calibration-layout .latitude-stage__feedback,
+.longitude-stage.is-calibration-layout .longitude-stage__feedback {
+  position: absolute;
+  z-index: 5;
+  top: var(--teaching-globe-center-y);
+  left: var(--teaching-side-left);
+  width: var(--teaching-side-width);
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  line-height: 1.58;
+  text-align: left;
+  transform: translateY(-50%);
+}
+
+.latitude-model-wrap,
+.longitude-model-wrap,
+.latitude-stage.is-calibration-layout .latitude-model-wrap,
+.longitude-stage.is-calibration-layout .longitude-model-wrap {
+  top: var(--teaching-globe-center-y);
+}
+
+.latitude-stage__actions.is-process-actions,
+.longitude-stage__actions.is-process-actions {
+  right: clamp(-8.2rem, -6.8vw, -5.5rem);
+  bottom: clamp(1.4rem, 6%, 3.2rem);
+}
+
+.latitude-stage__actions.is-answer-actions,
+.longitude-stage__actions.is-answer-actions {
+  top: calc(100% + var(--teaching-answer-gap));
+  bottom: auto;
+  gap: clamp(0.55rem, 1.2vw, 0.9rem);
+}
+
+.latitude-stage__actions.is-answer-actions button,
+.longitude-stage__actions.is-answer-actions button {
+  min-width: clamp(7.6rem, 8.5vw, 9rem);
+  min-height: clamp(2.75rem, 5.4vh, 3.25rem);
+  padding: clamp(0.52rem, 1vh, 0.72rem) clamp(1rem, 1.4vw, 1.35rem);
+  font-size: clamp(19px, 1.3vw, 24px);
+}
+
+@media (max-width: 1600px), (max-height: 900px) {
+  :root {
+    --teaching-side-left: clamp(1.1rem, 2.2vw, 2.75rem);
+    --teaching-side-width: clamp(11.5rem, 19vw, 19rem);
+    --teaching-action-offset: clamp(5.8rem, 7vw, 7.4rem);
+    --process-button-font-size: clamp(15px, 1.05vw, 18px);
+  }
+
+  .latitude-stage__prompt,
+  .longitude-stage__prompt,
+  .latitude-stage.is-calibration-layout .latitude-stage__prompt,
+  .longitude-stage.is-calibration-layout .longitude-stage__prompt {
+    width: min(64rem, 78vw);
+  }
+}
+
+@media (max-width: 1400px), (max-height: 800px) {
+  :root {
+    --font-classroom: clamp(20px, 1.65vw, 24px);
+    --teaching-side-left: 1.15rem;
+    --teaching-side-width: clamp(10.75rem, 18vw, 15.5rem);
+    --teaching-action-offset: clamp(4.8rem, 6.2vw, 6rem);
+    --process-button-bottom: clamp(1.2rem, 5%, 2.4rem);
+  }
+
+  .latitude-stage__prompt,
+  .longitude-stage__prompt,
+  .latitude-stage.is-calibration-layout .latitude-stage__prompt,
+  .longitude-stage.is-calibration-layout .longitude-stage__prompt {
+    top: clamp(2.5rem, 5.4vh, 3.2rem);
+    width: min(59rem, 76vw);
+    font-size: clamp(20px, 1.72vw, 26px);
+    line-height: 1.46;
+  }
+
+  .latitude-stage__feedback,
+  .longitude-stage__feedback,
+  .latitude-stage.is-calibration-layout .latitude-stage__feedback,
+  .longitude-stage.is-calibration-layout .longitude-stage__feedback {
+    font-size: clamp(18px, 1.52vw, 22px);
+  }
+
+  .latitude-stage__actions.is-process-actions,
+  .longitude-stage__actions.is-process-actions {
+    right: clamp(-6.7rem, -6.2vw, -5rem);
+  }
 }
 
 @media (max-width: 720px), (max-height: 620px) {

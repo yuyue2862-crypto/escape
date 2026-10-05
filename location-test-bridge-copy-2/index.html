@@ -148,8 +148,8 @@
             <dl class="device-readout">
               <div><dt>目的地</dt><dd>珠海</dd></div>
               <div id="deviceNetworkRow" hidden><dt>线网识别</dt><dd id="deviceNetworkValue">经线、纬线</dd></div>
-              <div><dt>南北位置</dt><dd id="deviceNorthValue">无法识别</dd></div>
-              <div><dt>东西位置</dt><dd id="deviceEastValue">无法识别</dd></div>
+              <div id="deviceNorthRow"><dt>南北位置</dt><dd id="deviceNorthValue">无法识别</dd></div>
+              <div id="deviceEastRow"><dt>东西位置</dt><dd id="deviceEastValue">无法识别</dd></div>
               <div id="deviceSystemRow" class="device-readout__fault"><dt>定位系统</dt><dd id="deviceSystemValue">损坏</dd></div>
             </dl>
           </section>
@@ -324,7 +324,7 @@
                 </filter>
               </defs>
               <path id="longitudeSphereShell" class="longitude-globe__shell" />
-              <g id="longitudeTeachingLines" class="longitude-globe__lines" clip-path="url(#longitudeSphereClip)"></g>
+              <g id="longitudeTeachingLines" class="longitude-globe__lines"></g>
               <g id="longitudeTeachingLabels" class="longitude-globe__labels"></g>
               <g id="longitudeTeachingMarker" class="position-test-point longitude-teaching-marker" aria-hidden="true">
                 <circle class="position-test-point__halo" r="22" />
