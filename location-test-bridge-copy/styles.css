@@ -1464,7 +1464,7 @@ button:focus-visible {
 }
 
 .scene.position-test-active .light-track.is-crossed-flash {
-  stroke: rgba(226, 250, 246, 0.98);
+  stroke: rgba(255, 220, 112, 0.98);
   stroke-width: 3.15;
   stroke-opacity: 1;
   opacity: 1;
@@ -1472,9 +1472,9 @@ button:focus-visible {
 }
 
 @keyframes crossed-line-flash {
-  0% { filter: url(#trackGlow); opacity: 0.76; }
-  30% { filter: url(#trackGlow); opacity: 1; }
-  100% { filter: url(#trackGlow); opacity: 0.72; }
+  0% { filter: drop-shadow(0 0 4px rgba(255, 207, 78, 0.34)); opacity: 0.76; }
+  30% { filter: drop-shadow(0 0 9px rgba(255, 218, 102, 0.68)); opacity: 1; }
+  100% { filter: drop-shadow(0 0 4px rgba(255, 207, 78, 0.3)); opacity: 0.72; }
 }
 
 .device.is-position-alert .device-panel {
@@ -1671,9 +1671,10 @@ button:focus-visible {
   z-index: 23;
   inset: clamp(1.2rem, 3vh, 2.4rem) 0 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto auto auto;
   justify-items: center;
   align-items: start;
+  align-content: start;
   width: min(72rem, 96vw);
   height: calc(100% - clamp(1.2rem, 3vh, 2.4rem));
   margin: 0 auto;
@@ -1713,12 +1714,168 @@ button:focus-visible {
 }
 
 .latitude-stage__feedback {
-  margin-top: -0.2rem;
+  grid-row: 3;
+  margin-top: -0.1rem;
   color: rgba(224, 214, 178, 0.82);
 }
 
+.latitude-stage > .latitude-model-wrap {
+  grid-row: 4;
+}
+
+.latitude-stage > .latitude-stage__actions {
+  grid-row: 5;
+}
+
+.latitude-stage.is-exploration-layout {
+  grid-template-columns: clamp(9.5rem, 12vw, 11.5rem) auto;
+  grid-template-rows: auto auto auto auto;
+  column-gap: clamp(1rem, 3vw, 3rem);
+  justify-content: center;
+}
+
+.latitude-stage.is-exploration-layout .latitude-stage__kicker,
+.latitude-stage.is-exploration-layout .latitude-stage__prompt,
+.latitude-stage.is-exploration-layout .latitude-stage__feedback {
+  grid-column: 1 / -1;
+}
+
+.latitude-stage.is-exploration-layout .latitude-model-wrap {
+  grid-column: 2;
+  grid-row: 4;
+  width: min(64vh, 42rem, calc(92vw - clamp(10.5rem, 15vw, 14rem)));
+}
+
+.latitude-stage.is-exploration-layout .latitude-stage__actions {
+  grid-column: 1;
+  grid-row: 4;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  align-self: center;
+  width: 100%;
+  height: min(54vh, 36rem);
+  min-height: 18rem;
+  margin: 0;
+  transform: translateX(clamp(2.5rem, 5vw, 5rem));
+}
+
+.latitude-stage.is-exploration-layout .latitude-stage__actions button {
+  min-width: 0;
+  width: 100%;
+  align-self: center;
+  padding-inline: 0.8rem;
+}
+
+.latitude-stage.is-exploration-layout .latitude-stage__actions button[data-latitude-action="explore-north"] {
+  grid-row: 1;
+}
+
+.latitude-stage.is-exploration-layout .latitude-stage__actions button[data-latitude-action="explore-south"] {
+  grid-row: 2;
+}
+
+.latitude-stage.is-exploration-layout .latitude-stage__feedback {
+  grid-row: 3;
+}
+
+.latitude-stage.is-calibration-layout {
+  grid-template-rows: auto auto auto auto auto;
+}
+
+.latitude-stage.is-calibration-layout .latitude-stage__prompt {
+  position: relative;
+  width: min(64rem, 94vw);
+  min-height: 1.9em;
+  margin-top: 0.15rem;
+  padding: 0.08rem 1rem 0.34rem;
+  color: rgba(255, 244, 201, 0.99);
+  font-size: clamp(28px, 1.72vw, 34px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 18px rgba(244, 202, 92, 0.22), 0 3px 24px rgba(0, 0, 0, 0.96);
+  border-bottom: 1px solid rgba(235, 199, 103, 0.2);
+  background: linear-gradient(90deg, transparent, rgba(123, 90, 24, 0.12) 28%, rgba(123, 90, 24, 0.12) 72%, transparent);
+}
+
+.latitude-stage__prompt.is-typing-question::after {
+  content: "▌";
+  margin-left: 0.12em;
+  color: rgba(255, 225, 137, 0.92);
+  animation: latitude-question-caret 0.62s steps(1, end) infinite;
+}
+
+@keyframes latitude-question-caret {
+  0%, 46% { opacity: 1; }
+  47%, 100% { opacity: 0; }
+}
+
+.latitude-stage.is-calibration-layout .latitude-stage__actions {
+  grid-row: 4;
+  min-height: 3.1rem;
+  margin: 0.18rem 0 0.25rem;
+}
+
+.latitude-stage.is-calibration-layout .latitude-stage__actions button {
+  min-width: 9.5rem;
+}
+
+.latitude-stage.is-calibration-layout .latitude-model-wrap {
+  grid-row: 5;
+  width: min(54vh, 37rem, 82vw);
+}
+
+.latitude-stage.is-calibration-layout .latitude-stage__feedback {
+  grid-row: 3;
+  min-height: 1.65em;
+  margin-top: -0.05rem;
+  color: rgba(255, 230, 153, 0.94);
+}
+
+.latitude-stage.is-calibration-one {
+  grid-template-rows: auto auto auto auto;
+}
+
+.latitude-stage.is-calibration-one .latitude-stage__actions {
+  display: none;
+}
+
+.latitude-stage.is-calibration-one .latitude-model-wrap {
+  grid-row: 4;
+  width: min(57vh, 39rem, 84vw);
+}
+
+.latitude-stage.is-calibration-one .latitude-stage__feedback {
+  grid-row: 3;
+}
+
+.latitude-stage.is-calibration-two .latitude-stage__actions button {
+  min-width: 8.75rem;
+  min-height: 3rem;
+  font-size: clamp(22px, 1.25vw, 24px);
+}
+
+.latitude-stage.is-summary-layout {
+  grid-template-rows: auto auto auto auto auto;
+}
+
+.latitude-stage.is-summary-layout .latitude-stage__prompt {
+  width: min(66rem, 94vw);
+  color: rgba(255, 242, 195, 0.98);
+  font-weight: 600;
+}
+
+.latitude-stage.is-summary-layout .latitude-model-wrap {
+  grid-row: 4;
+  width: min(57vh, 39rem, 84vw);
+}
+
+.latitude-stage.is-summary-layout .latitude-stage__actions {
+  grid-row: 5;
+  margin: 0.1rem 0 0.65rem;
+}
+
 .latitude-model-wrap {
-  width: min(64vh, 42rem, 86vw);
+  width: min(58vh, 40rem, 86vw);
   min-height: 0;
   align-self: center;
   aspect-ratio: 1;
@@ -1757,8 +1914,14 @@ button:focus-visible {
   cursor: pointer;
 }
 
+.latitude-line-group,
+.latitude-line-group:focus,
+.latitude-line-group:focus-visible {
+  outline: none;
+}
+
 .latitude-line-group.is-interactive:hover .latitude-line,
-.latitude-line-group.is-interactive:focus-within .latitude-line {
+.latitude-line-group.is-interactive:focus-visible .latitude-line {
   stroke: rgba(255, 223, 120, 0.98);
   stroke-width: 2.8;
   filter: url(#latitudeGlow);
@@ -1775,9 +1938,26 @@ button:focus-visible {
   animation: latitude-pair-flash 1.2s ease-in-out 1;
 }
 
+.latitude-line-group.is-error-flash .latitude-line {
+  animation: latitude-error-flash 0.58s ease-out 1;
+}
+
 @keyframes latitude-pair-flash {
   0%, 100% { stroke-opacity: 0.72; filter: none; }
   50% { stroke-opacity: 1; filter: url(#latitudeGlow); }
+}
+
+@keyframes latitude-error-flash {
+  0%, 100% {
+    stroke: rgba(238, 197, 83, 0.7);
+    stroke-width: 2.25;
+    filter: none;
+  }
+  42% {
+    stroke: rgba(255, 224, 126, 0.98);
+    stroke-width: 3;
+    filter: url(#latitudeGlow);
+  }
 }
 
 .latitude-label,
@@ -1823,7 +2003,7 @@ button:focus-visible {
   justify-content: center;
   gap: 0.9rem;
   min-height: 3.35rem;
-  margin: 0.35rem 0 1.2rem;
+  margin: 0.3rem 0 0.65rem;
 }
 
 .latitude-stage__actions button:disabled {
@@ -1857,6 +2037,416 @@ button:focus-visible {
 .scene.latitude-active .task-prompt,
 .scene.latitude-active .investigation-feedback,
 .scene.latitude-active .device {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.longitude-intro {
+  position: absolute;
+  z-index: 24;
+  left: 50%;
+  top: clamp(4.5rem, 11vh, 7.5rem);
+  width: min(66rem, 92vw);
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  color: rgba(226, 239, 235, 0.92);
+  text-align: center;
+  text-shadow: 0 3px 24px rgba(0, 0, 0, 0.94);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+  transition: opacity 0.7s ease, transform 0.8s var(--ease-calm), visibility 0.7s;
+}
+
+.longitude-intro.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.longitude-intro p {
+  margin: 0;
+  font-size: var(--font-classroom);
+  line-height: 1.7;
+  letter-spacing: 0.07em;
+}
+
+.longitude-intro__lead {
+  color: rgba(214, 232, 228, 0.84);
+}
+
+.longitude-intro__question {
+  max-width: 62rem;
+  color: rgba(241, 246, 235, 0.96);
+}
+
+.longitude-intro__title {
+  margin-top: 0.8rem !important;
+  color: rgba(255, 238, 181, 0.98);
+}
+
+.longitude-intro__start,
+.longitude-stage__actions button {
+  min-width: 9rem;
+  min-height: 3.25rem;
+  padding: 0.72rem 1.35rem;
+  border: 1px solid rgba(219, 190, 103, 0.38);
+  border-radius: 999px;
+  color: rgba(247, 239, 209, 0.96);
+  background: rgba(50, 39, 14, 0.78);
+  font-size: var(--font-classroom);
+  box-shadow: 0 9px 28px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 0.25s ease, border-color 0.25s ease, background 0.25s ease, transform 0.25s ease;
+}
+
+.longitude-intro__start {
+  margin-top: 0.75rem;
+}
+
+.longitude-intro__start:hover,
+.longitude-intro__start:focus-visible,
+.longitude-stage__actions button:hover,
+.longitude-stage__actions button:focus-visible {
+  color: #fff;
+  border-color: rgba(247, 215, 116, 0.76);
+  background: rgba(77, 58, 17, 0.9);
+  transform: translateY(-1px);
+}
+
+.longitude-stage {
+  position: absolute;
+  z-index: 25;
+  inset: clamp(1rem, 2.4vh, 2rem) 0 0;
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  justify-items: center;
+  align-content: start;
+  width: min(76rem, 96vw);
+  height: calc(100% - clamp(1rem, 2.4vh, 2rem));
+  margin: 0 auto;
+  color: rgba(241, 229, 188, 0.94);
+  text-align: center;
+  text-shadow: 0 3px 24px rgba(0, 0, 0, 0.95);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity 0.85s ease, transform 0.95s var(--ease-calm), visibility 0.85s;
+}
+
+.scene.longitude-active .longitude-stage {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.longitude-stage__kicker {
+  margin: 0;
+  color: rgba(218, 187, 96, 0.72);
+  font-size: var(--font-record-label);
+  letter-spacing: 0.2em;
+}
+
+.longitude-stage__prompt,
+.longitude-stage__feedback {
+  width: min(68rem, 94vw);
+  min-height: 1.7em;
+  margin: 0.3rem 0 0;
+  color: rgba(248, 240, 210, 0.96);
+  font-size: var(--font-classroom);
+  line-height: 1.62;
+  letter-spacing: 0.055em;
+}
+
+.longitude-stage__feedback {
+  min-height: 1.6em;
+  margin-top: -0.05rem;
+  color: rgba(255, 226, 143, 0.9);
+}
+
+.longitude-stage.is-prime-layout .longitude-stage__prompt {
+  max-width: 70rem;
+  padding-inline: 1rem;
+  font-size: clamp(24px, 1.4vw, 28px);
+  line-height: 1.7;
+}
+
+.longitude-stage__actions {
+  position: absolute;
+  z-index: 4;
+  right: max(-8rem, calc((100% - 100vw) / 2 + 1rem));
+  bottom: clamp(2.4rem, 8%, 4.2rem);
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 0;
+  margin: 0;
+}
+
+.longitude-stage__actions:empty {
+  display: none;
+}
+
+.longitude-stage__actions button {
+  min-width: 7.5rem;
+  min-height: 2.5rem;
+  padding: 0.42rem 0.95rem;
+  font-size: clamp(16px, 1.05vw, 19px);
+}
+
+.longitude-stage__actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+
+.longitude-model-wrap {
+  position: relative;
+  width: min(74vh, 52rem, 92vw);
+  min-height: 0;
+  margin-top: clamp(0.3rem, 1vh, 0.7rem);
+  align-self: start;
+  aspect-ratio: 1;
+}
+
+.longitude-stage.is-calibration-layout .longitude-stage__prompt {
+  position: relative;
+  width: min(66rem, 94vw);
+  min-height: 1.9em;
+  margin-top: 0.1rem;
+  padding: 0.08rem 1rem 0.32rem;
+  color: rgba(255, 244, 201, 0.99);
+  font-size: clamp(28px, 1.72vw, 34px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid rgba(235, 199, 103, 0.2);
+  background: linear-gradient(90deg, transparent, rgba(123, 90, 24, 0.12) 28%, rgba(123, 90, 24, 0.12) 72%, transparent);
+}
+
+.longitude-stage__prompt.is-typing-question::after {
+  content: "▌";
+  margin-left: 0.12em;
+  color: rgba(255, 225, 137, 0.92);
+  animation: longitude-question-caret 0.62s steps(1, end) infinite;
+}
+
+@keyframes longitude-question-caret {
+  0%, 46% { opacity: 1; }
+  47%, 100% { opacity: 0; }
+}
+
+.longitude-stage.is-calibration-layout .longitude-model-wrap {
+  width: min(68vh, 47rem, 90vw);
+}
+
+.longitude-stage.is-calibration-two .longitude-model-wrap {
+  margin-top: clamp(4.4rem, 6.5vh, 4.8rem);
+}
+
+.longitude-stage__actions.is-answer-actions {
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  top: clamp(-5.6rem, -8vh, -5rem);
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 0.9rem;
+  width: max-content;
+  transform: translateX(-50%);
+}
+
+.longitude-stage__actions.is-answer-actions button {
+  min-width: 9rem;
+  min-height: 3.25rem;
+  padding: 0.72rem 1.35rem;
+  font-size: var(--font-classroom);
+  white-space: nowrap;
+}
+
+.longitude-stage.is-calibration-one .longitude-stage__actions {
+  display: none;
+}
+
+.longitude-stage.is-summary-layout .longitude-stage__prompt {
+  width: min(70rem, 94vw);
+  color: rgba(255, 242, 195, 0.99);
+  font-weight: 600;
+}
+
+.longitude-globe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  touch-action: none;
+  user-select: none;
+}
+
+.longitude-stage.is-draggable .longitude-globe {
+  cursor: grab;
+}
+
+.longitude-stage.is-draggable .longitude-globe:active {
+  cursor: grabbing;
+}
+
+.longitude-globe__shell {
+  fill: url(#longitudeSphereFill);
+  stroke: rgba(240, 202, 91, 0.7);
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 12px rgba(195, 143, 35, 0.2));
+}
+
+.longitude-equator-line {
+  fill: none;
+  stroke: rgba(242, 205, 97, 0.42);
+  stroke-width: 1.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.longitude-line {
+  fill: none;
+  stroke: rgba(231, 192, 82, 0.44);
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 0.25s ease, stroke-width 0.25s ease, filter 0.25s ease, opacity 0.25s ease;
+}
+
+.longitude-line-hit {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.001);
+  stroke-width: 20;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  cursor: pointer;
+}
+
+.longitude-line-hit-node {
+  fill: rgba(255, 255, 255, 0.001);
+  stroke: none;
+  pointer-events: none;
+  cursor: pointer;
+}
+
+.longitude-line-group,
+.longitude-line-group:focus,
+.longitude-line-group:focus-visible {
+  outline: none;
+}
+
+.longitude-line-group.is-interactive:hover .longitude-line,
+.longitude-line-group.is-interactive:focus-visible .longitude-line {
+  stroke: rgba(255, 224, 127, 0.9);
+  stroke-width: 2.35;
+  filter: url(#longitudeGlow);
+}
+
+.longitude-line-group.is-attempted .longitude-line {
+  stroke: rgba(255, 218, 113, 0.84);
+  stroke-width: 2.25;
+  filter: url(#longitudeGlow);
+}
+
+.longitude-line-group.is-prime .longitude-line {
+  stroke: #fff0a3;
+  stroke-width: 5.2;
+  opacity: 1;
+  filter: url(#longitudeGlow) drop-shadow(0 0 7px rgba(255, 204, 70, 0.9));
+}
+
+.longitude-stage.is-prime-layout .longitude-line-group:not(.is-prime) .longitude-line {
+  stroke: rgba(205, 166, 69, 0.34);
+  opacity: 0.24;
+  filter: none;
+}
+
+.longitude-stage.is-prime-layout .longitude-line-group.is-antimeridian .longitude-line {
+  opacity: 0.02;
+  filter: none;
+}
+
+.longitude-line-group.is-calibration-target .longitude-line {
+  stroke: rgba(255, 239, 166, 1);
+  stroke-width: 4.25;
+  filter: url(#longitudeGlow);
+}
+
+.longitude-line-group.is-error-flash .longitude-line {
+  animation: longitude-error-flash 0.58s ease-out 1;
+}
+
+@keyframes longitude-error-flash {
+  0%, 100% {
+    stroke: rgba(231, 192, 82, 0.44);
+    stroke-width: 1.55;
+    filter: none;
+  }
+  42% {
+    stroke: rgba(255, 224, 126, 0.98);
+    stroke-width: 3;
+    filter: url(#longitudeGlow);
+  }
+}
+
+.longitude-label {
+  fill: rgba(255, 235, 171, 0.97);
+  font-family: inherit;
+  font-size: clamp(18px, 1.15vw, 22px);
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  paint-order: stroke;
+  stroke: rgba(9, 8, 4, 0.92);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 0.38s ease, fill 0.3s ease;
+  pointer-events: none;
+}
+
+.longitude-label.is-visible {
+  opacity: 1;
+}
+
+.longitude-label.is-visible.is-back {
+  opacity: 0;
+}
+
+.longitude-label--prime {
+  fill: rgba(255, 244, 204, 1);
+  font-size: clamp(19px, 1.24vw, 24px);
+  font-weight: 650;
+}
+
+.longitude-label.is-target-hidden {
+  opacity: 0 !important;
+}
+
+.longitude-teaching-marker {
+  transition: opacity 0.35s ease;
+}
+
+.scene.longitude-active .world {
+  opacity: 0.18;
+  filter: saturate(0.48) brightness(0.68);
+}
+
+.scene.longitude-active .scan-records,
+.scene.longitude-active .task-reminder,
+.scene.longitude-active .task-prompt,
+.scene.longitude-active .investigation-feedback,
+.scene.longitude-active .device,
+.scene.longitude-active .latitude-intro,
+.scene.longitude-active .latitude-stage {
   opacity: 0;
   pointer-events: none;
 }

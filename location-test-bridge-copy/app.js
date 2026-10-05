@@ -74,6 +74,21 @@
   const latitudeTeachingLines = document.querySelector("#latitudeTeachingLines");
   const latitudeTeachingLabels = document.querySelector("#latitudeTeachingLabels");
   const latitudeTeachingMarker = document.querySelector("#latitudeTeachingMarker");
+  const longitudeIntroStage = document.querySelector("#longitudeIntroStage");
+  const longitudeIntroLead = document.querySelector("#longitudeIntroLead");
+  const longitudeIntroQuestion = document.querySelector("#longitudeIntroQuestion");
+  const longitudeIntroTitle = document.querySelector("#longitudeIntroTitle");
+  const longitudeIntroStart = document.querySelector("#longitudeIntroStart");
+  const longitudeStage = document.querySelector("#longitudeStage");
+  const longitudePrompt = document.querySelector("#longitudePrompt");
+  const longitudeFeedback = document.querySelector("#longitudeFeedback");
+  const longitudeActions = document.querySelector("#longitudeActions");
+  const longitudeGlobe = document.querySelector("#longitudeGlobe");
+  const longitudeSphereShell = document.querySelector("#longitudeSphereShell");
+  const longitudeEquator = document.querySelector("#longitudeEquator");
+  const longitudeTeachingLines = document.querySelector("#longitudeTeachingLines");
+  const longitudeTeachingLabels = document.querySelector("#longitudeTeachingLabels");
+  const longitudeTeachingMarker = document.querySelector("#longitudeTeachingMarker");
 
   const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -114,6 +129,8 @@
   let positionDeviceReviewActive = false;
   let positionDeviceCloseResolver = null;
   let relationshipRecordResult = null;
+  let latitudeQuestionSequence = 0;
+  let longitudeQuestionSequence = 0;
   const scannedTypes = new Set();
   const scanHistory = [];
   const scannedLineIndices = {};
@@ -143,7 +160,7 @@
     center: [310, 310],
     scale: 220,
   };
-  const latitudeTravelLongitude = 18;
+  const latitudeTravelLongitude = getFrontFacingLatitudeTravelLongitude(latitudeTeachingModel);
   const latitudeTaskState = {
     phase: "idle",
     equatorFound: false,
@@ -153,6 +170,50 @@
     calibration2Complete: false,
     calibration1Errors: 0,
     calibration2Errors: 0,
+  };
+
+  const longitudeTeachingValues = [
+    -180,
+    -150,
+    -120,
+    -90,
+    -60,
+    -30,
+    0,
+    30,
+    60,
+    90,
+    120,
+    150,
+  ];
+  const longitudeDegreeValues = [30, 60, 90, 120, 150, 180];
+  const longitudeTeachingModel = {
+    radius: 1,
+    rotation: { x: 0, y: 180, z: 0 },
+    center: [310, 310],
+    scale: 220,
+  };
+  const longitudeTaskState = {
+    phase: "idle",
+    zeroAttempts: 0,
+    zeroAttemptValues: [],
+    primeEstablished: false,
+    exploredDirections: [],
+    ewEstablished: false,
+    calibration1Complete: false,
+    calibration2Complete: false,
+    calibration1Errors: 0,
+    calibration2Errors: 0,
+  };
+  const longitudeDragState = {
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    startRotation: 180,
+    targetLongitude: null,
+    moved: false,
+    suppressClick: false,
   };
 
   const PROGRESS_KEY = "geoEscapeProgress";
@@ -174,6 +235,11 @@
       title: "任务二：修复南北定位",
       startCheckpoint: "latitude-start",
     },
+    {
+      id: "longitude",
+      title: "任务三：修复东西定位",
+      startCheckpoint: "longitude-start",
+    },
   ];
   const checkpointRegistry = {
     opening: { task: "opening", furthestTask: "opening" },
@@ -192,9 +258,20 @@
     "latitude-both-sides-complete": { task: "latitude", furthestTask: "latitude" },
     "latitude-ns-complete": { task: "latitude", furthestTask: "latitude" },
     "latitude-calibration-1-complete": { task: "latitude", furthestTask: "latitude" },
-    "latitude-complete": { task: "latitude", furthestTask: "latitude" },
+    "latitude-calibration-complete": { task: "latitude", furthestTask: "latitude" },
+    "latitude-complete": { task: "longitude", furthestTask: "longitude" },
+    "longitude-start": { task: "longitude", furthestTask: "longitude" },
+    "longitude-one-zero-attempt": { task: "longitude", furthestTask: "longitude" },
+    "longitude-zero-conflict-complete": { task: "longitude", furthestTask: "longitude" },
+    "longitude-prime-established": { task: "longitude", furthestTask: "longitude" },
+    "longitude-one-side-complete": { task: "longitude", furthestTask: "longitude" },
+    "longitude-both-sides-complete": { task: "longitude", furthestTask: "longitude" },
+    "longitude-ew-complete": { task: "longitude", furthestTask: "longitude" },
+    "longitude-calibration-1-complete": { task: "longitude", furthestTask: "longitude" },
+    "longitude-calibration-complete": { task: "longitude", furthestTask: "longitude" },
+    "longitude-complete": { task: "longitude", furthestTask: "longitude" },
   };
-  const taskOrder = ["opening", "task1", "position-test", "latitude"];
+  const taskOrder = ["opening", "task1", "position-test", "latitude", "longitude"];
   let progressData = loadProgress();
   let activeCheckpoint = "opening";
 
@@ -214,6 +291,15 @@
         equatorFound: false,
         exploredDirections: [],
         nsEstablished: false,
+        calibration1Complete: false,
+        calibration2Complete: false,
+      },
+      longitude: {
+        zeroAttempts: 0,
+        zeroAttemptValues: [],
+        primeEstablished: false,
+        exploredDirections: [],
+        ewEstablished: false,
         calibration1Complete: false,
         calibration2Complete: false,
       },
@@ -244,6 +330,7 @@
     const task1State = candidate.taskState?.task1 || {};
     const positionState = candidate.taskState?.positionTest || {};
     const latitudeState = candidate.taskState?.latitude || {};
+    const longitudeState = candidate.taskState?.longitude || {};
     const validScannedTypes = Array.isArray(task1State.scannedTypes)
       ? task1State.scannedTypes.filter((type) => type === "latitude" || type === "longitude")
       : [];
@@ -267,6 +354,12 @@
       && taskOrder.indexOf(normalizedFurthestTask) < taskOrder.indexOf("latitude")
     ) {
       normalizedFurthestTask = "latitude";
+    }
+    if (
+      (validCompletedTasks.includes("latitude") || candidate.checkpoint === "latitude-complete")
+      && taskOrder.indexOf(normalizedFurthestTask) < taskOrder.indexOf("longitude")
+    ) {
+      normalizedFurthestTask = "longitude";
     }
     const normalizedCurrentTask = checkpointRegistry[candidate.checkpoint].task;
     const taskCheckpoints = {};
@@ -292,6 +385,13 @@
       && validCompletedTasks.includes("position-test")
     ) {
       taskCheckpoints.latitude = "position-test-complete";
+    }
+    if (
+      normalizedFurthestTask === "longitude"
+      && !taskCheckpoints.longitude
+      && validCompletedTasks.includes("latitude")
+    ) {
+      taskCheckpoints.longitude = "latitude-complete";
     }
     const completedTaskState = {};
     if (candidate.completedTaskState?.task1) {
@@ -330,6 +430,23 @@
         calibration2Complete: Boolean(candidate.completedTaskState.latitude.calibration2Complete),
       };
     }
+    if (candidate.completedTaskState?.longitude) {
+      completedTaskState.longitude = {
+        zeroAttempts: Math.min(2, Math.max(0, Number(candidate.completedTaskState.longitude.zeroAttempts) || 0)),
+        zeroAttemptValues: (candidate.completedTaskState.longitude.zeroAttemptValues || [])
+          .filter((value) => Number.isFinite(Number(value)))
+          .slice(0, 2)
+          .map(Number),
+        primeEstablished: Boolean(candidate.completedTaskState.longitude.primeEstablished),
+        exploredDirections: [...new Set(
+          (candidate.completedTaskState.longitude.exploredDirections || [])
+            .filter((direction) => direction === "east" || direction === "west"),
+        )],
+        ewEstablished: Boolean(candidate.completedTaskState.longitude.ewEstablished),
+        calibration1Complete: Boolean(candidate.completedTaskState.longitude.calibration1Complete),
+        calibration2Complete: Boolean(candidate.completedTaskState.longitude.calibration2Complete),
+      };
+    }
 
     return {
       version: PROGRESS_VERSION,
@@ -365,6 +482,21 @@
           nsEstablished: Boolean(latitudeState.nsEstablished),
           calibration1Complete: Boolean(latitudeState.calibration1Complete),
           calibration2Complete: Boolean(latitudeState.calibration2Complete),
+        },
+        longitude: {
+          zeroAttempts: Math.min(2, Math.max(0, Number(longitudeState.zeroAttempts) || 0)),
+          zeroAttemptValues: (longitudeState.zeroAttemptValues || [])
+            .filter((value) => Number.isFinite(Number(value)))
+            .slice(0, 2)
+            .map(Number),
+          primeEstablished: Boolean(longitudeState.primeEstablished),
+          exploredDirections: [...new Set(
+            (longitudeState.exploredDirections || [])
+              .filter((direction) => direction === "east" || direction === "west"),
+          )],
+          ewEstablished: Boolean(longitudeState.ewEstablished),
+          calibration1Complete: Boolean(longitudeState.calibration1Complete),
+          calibration2Complete: Boolean(longitudeState.calibration2Complete),
         },
       },
     };
@@ -411,6 +543,15 @@
         calibration1Complete: latitudeTaskState.calibration1Complete,
         calibration2Complete: latitudeTaskState.calibration2Complete,
       },
+      longitude: {
+        zeroAttempts: longitudeTaskState.zeroAttempts,
+        zeroAttemptValues: [...longitudeTaskState.zeroAttemptValues],
+        primeEstablished: longitudeTaskState.primeEstablished,
+        exploredDirections: [...longitudeTaskState.exploredDirections],
+        ewEstablished: longitudeTaskState.ewEstablished,
+        calibration1Complete: longitudeTaskState.calibration1Complete,
+        calibration2Complete: longitudeTaskState.calibration2Complete,
+      },
     };
   }
 
@@ -432,6 +573,7 @@
     const shouldCaptureTask1 = checkpoint.startsWith("task1-");
     const shouldCapturePosition = checkpoint.includes("test-") || checkpoint === "position-test-complete";
     const shouldCaptureLatitude = checkpoint.startsWith("latitude-");
+    const shouldCaptureLongitude = checkpoint.startsWith("longitude-");
 
     const nextProgress = {
       version: PROGRESS_VERSION,
@@ -467,6 +609,11 @@
           ...previousState.latitude,
           ...(shouldCaptureLatitude ? liveState.latitude : {}),
           ...(suppliedState.latitude || {}),
+        },
+        longitude: {
+          ...previousState.longitude,
+          ...(shouldCaptureLongitude ? liveState.longitude : {}),
+          ...(suppliedState.longitude || {}),
         },
       },
     };
@@ -562,12 +709,24 @@
           mapping: { north: null, east: null },
         },
       };
-    } else {
+    } else if (taskId === "latitude") {
       taskState = {
         latitude: {
           equatorFound: false,
           exploredDirections: [],
           nsEstablished: false,
+          calibration1Complete: false,
+          calibration2Complete: false,
+        },
+      };
+    } else {
+      taskState = {
+        longitude: {
+          zeroAttempts: 0,
+          zeroAttemptValues: [],
+          primeEstablished: false,
+          exploredDirections: [],
+          ewEstablished: false,
           calibration1Complete: false,
           calibration2Complete: false,
         },
@@ -841,6 +1000,51 @@
       depth: rotatedPoint[2],
       rotatedPoint,
     };
+  }
+
+  function getFrontFacingLongitudeRotation(longitude, model) {
+    let bestRotation = model.rotation.y;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (let rotationY = 0; rotationY <= 360; rotationY += 1) {
+      const candidateModel = {
+        ...model,
+        rotation: { ...model.rotation, y: rotationY },
+      };
+      const point = projectOrthographicPoint(
+        getLongitudePoint(longitude, 0, model.radius),
+        candidateModel,
+      );
+      const centerDistance = Math.abs(point.x - model.center[0]);
+      const frontPenalty = (point.depth + model.radius) * model.scale;
+      const score = centerDistance + Math.max(0, frontPenalty);
+      if (score < bestScore) {
+        bestScore = score;
+        bestRotation = rotationY;
+      }
+    }
+
+    return bestRotation;
+  }
+
+  function getFrontFacingLatitudeTravelLongitude(model) {
+    let frontLongitude = -180;
+    let nearestDepth = Number.POSITIVE_INFINITY;
+
+    for (let longitude = -180; longitude < 180; longitude += 1) {
+      const { depth } = projectOrthographicPoint(
+        getLatitudePoint(0, longitude, model.radius),
+        model,
+      );
+      // The teaching globe is observed from the negative-z side, so the
+      // smallest rotated z value is the point nearest the viewer.
+      if (depth < nearestDepth) {
+        nearestDepth = depth;
+        frontLongitude = longitude;
+      }
+    }
+
+    return frontLongitude;
   }
 
   function createSphereShellPath(type, model = scanProjectionModels[type]) {
@@ -1199,6 +1403,19 @@
     });
   }
 
+  function hideLatitudeDegree(latitude) {
+    const label = getLatitudeDegreeLabel(latitude);
+    if (!label) return;
+    label.classList.remove("is-visible");
+    label.setAttribute("aria-hidden", "true");
+  }
+
+  function showCompleteLatitudeNotation() {
+    showLatitudeDegree(0);
+    showLatitudeDirection("north", "ns");
+    showLatitudeDirection("south", "ns");
+  }
+
   function resetLatitudeTeachingVisuals() {
     latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
       group.classList.remove(
@@ -1452,7 +1669,8 @@
     positionTestActions.replaceChildren();
     setPositionRouteReference("longitude", positionTestConfig.start.longitude);
     setPositionMarker(positionTestConfig.start.latitude, positionTestConfig.start.longitude);
-    await wait(350);
+    flashPositionCrossedLine("latitude", positionTestConfig.start.latitude);
+    await wait(positionTestConfig.lineFlashDuration);
     await animatePositionMovement({
       start: positionTestConfig.start,
       end: positionTestConfig.northEnd,
@@ -1503,7 +1721,8 @@
     positionTestActions.replaceChildren();
     setPositionRouteReference("latitude", positionTestConfig.start.latitude);
     setPositionMarker(positionTestConfig.start.latitude, positionTestConfig.start.longitude);
-    await wait(350);
+    flashPositionCrossedLine("longitude", positionTestConfig.start.longitude);
+    await wait(positionTestConfig.lineFlashDuration);
     await animatePositionMovement({
       start: positionTestConfig.start,
       end: positionTestConfig.eastEnd,
@@ -1608,25 +1827,23 @@
 
     scene.classList.add("position-test-active");
     positionTestStage.setAttribute("aria-hidden", "false");
-    setPositionTestCopy({ prompt: "方向对应已经找到了。" });
-    positionTestActions.replaceChildren();
-    await wait(1800);
-    setPositionTestCopy({
-      prompt: "可是，同一组里有这么多条线，怎么知道自己具体在哪一条？",
-    });
-    await wait(1700);
+    positionTestState.phase = "knowledge-bridge";
+    setPositionTestCopy({ prompt: "纬线帮助定位南北向。" });
+    await waitForPositionAction([{ label: "继续", value: "continue-latitude-bridge" }]);
+    setPositionTestCopy({ prompt: "可是，地球上有这么多条纬线，怎样区分它们呢？" });
+    await waitForPositionAction([{ label: "答案", value: "reveal-latitude-answer" }]);
+    setPositionTestCopy({ prompt: "我们可以用度数来区别不同的纬线。" });
+    await waitForPositionAction([{ label: "原来如此", value: "open-latitude-task" }]);
     positionTestState.phase = "complete";
-    positionTestFeedback.textContent = "下一步：想办法区分不同的纬线";
-    taskReminder.textContent = "下一步：想办法区分不同的纬线";
-    taskReminder.classList.add("is-visible");
+    taskReminder.classList.remove("is-visible");
     markTaskComplete("position-test", "position-test-complete");
-    await wait(1500);
     await showLatitudeTaskIntro(true);
   }
 
   async function beginPositionTest() {
     investigationPhase = "position-test";
     positionTestState.phase = "device-intro";
+    applyScanRecordKnowledgeLabels();
     await wait(1200);
     await reviewPositionDevice(false);
 
@@ -1647,8 +1864,54 @@
   }
 
   function setLatitudeCopy({ prompt = "", feedback = "" } = {}) {
+    latitudeQuestionSequence += 1;
+    latitudePrompt.classList.remove("is-typing-question");
+    latitudePrompt.removeAttribute("aria-busy");
     latitudePrompt.textContent = prompt;
     latitudeFeedback.textContent = feedback;
+  }
+
+  async function typeLatitudeQuestion(question) {
+    const sequence = ++latitudeQuestionSequence;
+    latitudePrompt.textContent = "";
+    latitudeFeedback.textContent = "";
+    latitudePrompt.classList.add("is-typing-question");
+    latitudePrompt.setAttribute("aria-busy", "true");
+    await wait(100);
+
+    for (const [characterIndex, character] of Array.from(question).entries()) {
+      if (sequence !== latitudeQuestionSequence) return false;
+      latitudePrompt.textContent += character;
+      playRecordTick(characterIndex);
+      await wait(46);
+    }
+
+    if (sequence !== latitudeQuestionSequence) return false;
+    latitudePrompt.classList.remove("is-typing-question");
+    latitudePrompt.removeAttribute("aria-busy");
+    return true;
+  }
+
+  function setLatitudeStageMode(mode = "default") {
+    latitudeStage.classList.remove(
+      "is-exploration-layout",
+      "is-calibration-layout",
+      "is-calibration-one",
+      "is-calibration-two",
+      "is-summary-layout",
+    );
+    if (mode === "exploration") {
+      latitudeStage.classList.add("is-exploration-layout");
+    }
+    if (mode === "calibration-one" || mode === "calibration-two") {
+      latitudeStage.classList.add(
+        "is-calibration-layout",
+        mode === "calibration-one" ? "is-calibration-one" : "is-calibration-two",
+      );
+    }
+    if (mode === "summary") {
+      latitudeStage.classList.add("is-summary-layout");
+    }
   }
 
   function setLatitudeActions(actions = []) {
@@ -1696,10 +1959,13 @@
   }
 
   function showLatitudeIntroContent() {
-    latitudeIntroLine1.textContent = "南北方向已经找对了。";
-    latitudeIntroLine2.textContent = "可是，这么多条纬线，怎样才能知道自己具体在哪一条？";
+    latitudeIntroLine1.textContent = "";
+    latitudeIntroLine1.hidden = true;
+    latitudeIntroLine2.textContent = "";
+    latitudeIntroLine2.hidden = true;
     latitudeIntroTitle.textContent = "任务二：修复南北定位";
-    latitudeIntroHint.textContent = "先想办法区分不同的纬线。";
+    latitudeIntroHint.textContent = "先找一找，哪一条纬线适合作为0°。";
+    latitudeIntroHint.hidden = false;
     latitudeIntroStart.hidden = false;
     latitudeIntroStart.disabled = false;
   }
@@ -1719,16 +1985,18 @@
       return;
     }
 
-    latitudeIntroLine1.textContent = "南北方向已经找对了。";
+    latitudeIntroLine1.textContent = "";
+    latitudeIntroLine1.hidden = true;
     latitudeIntroLine2.textContent = "";
+    latitudeIntroLine2.hidden = true;
     latitudeIntroTitle.textContent = "";
     latitudeIntroHint.textContent = "";
+    latitudeIntroHint.hidden = false;
     latitudeIntroStart.hidden = true;
-    await wait(1800);
-    latitudeIntroLine2.textContent = "可是，这么多条纬线，怎样才能知道自己具体在哪一条？";
-    await wait(2100);
+    await wait(650);
     latitudeIntroTitle.textContent = "任务二：修复南北定位";
-    latitudeIntroHint.textContent = "先想办法区分不同的纬线。";
+    await wait(850);
+    latitudeIntroHint.textContent = "先找一找，哪一条纬线适合作为0°。";
     latitudeIntroStart.hidden = false;
   }
 
@@ -1739,6 +2007,7 @@
     latitudeIntroStage.setAttribute("aria-hidden", "true");
     latitudeStage.setAttribute("aria-hidden", "false");
     scene.classList.add("latitude-active");
+    setLatitudeStageMode();
     buildLatitudeTeachingGlobe();
     resetLatitudeTeachingVisuals();
     setLatitudeActions();
@@ -1748,7 +2017,7 @@
   function prepareLatitudeEquatorQuestion() {
     latitudeTaskState.phase = "equator-question";
     setLatitudeLineInteraction(true);
-    setLatitudeCopy({ prompt: "你认为哪条纬线适合作为纬度的0度线？" });
+    setLatitudeCopy({ prompt: "先找一找，哪一条纬线适合作为0°。" });
     setLatitudeActions();
   }
 
@@ -1768,6 +2037,7 @@
 
   function showLatitudeExplorationChoices() {
     latitudeTaskState.phase = "choose-direction";
+    setLatitudeStageMode("exploration");
     setLatitudeLineInteraction(false);
     getLatitudeLineGroup(0)?.classList.add("is-equator");
     showLatitudeDegree(0);
@@ -1835,6 +2105,7 @@
 
   function showBothLatitudeSidesQuestion() {
     latitudeTaskState.phase = "both-sides-question";
+    setLatitudeStageMode();
     getLatitudeLineGroup(0)?.classList.add("is-equator");
     showLatitudeDegree(0);
     showLatitudeDirection("north");
@@ -1876,6 +2147,7 @@
 
   async function establishLatitudeNotation() {
     latitudeTaskState.phase = "establishing-ns";
+    setLatitudeStageMode();
     setLatitudeActions();
     setLatitudeCopy({ prompt: "赤道以北，叫北纬，用 N 表示。" });
     for (const degree of [20, 40, 60, 80, 90]) {
@@ -1892,7 +2164,7 @@
     latitudeTaskState.nsEstablished = true;
     updateCheckpoint("latitude-ns-complete");
     setLatitudeCopy({
-      feedback: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
+      prompt: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
     });
     setLatitudeActions([{ label: "进入定位校准", action: "start-calibration-1" }]);
   }
@@ -1900,43 +2172,60 @@
   function startLatitudeCalibrationOne() {
     latitudeTaskState.phase = "calibration-1";
     latitudeTaskState.calibration1Errors = 0;
-    hideLatitudeDegreeLabels(true);
+    setLatitudeStageMode("calibration-one");
+    showCompleteLatitudeNotation();
     latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
       group.classList.remove("is-calibration-target");
     });
-    setLatitudeLineInteraction(true);
-    setLatitudeCopy({ prompt: "校准1：请找到 40°S。" });
+    setLatitudeLineInteraction(false);
+    setLatitudeCopy();
     setLatitudeActions();
+    void typeLatitudeQuestion("校准1：请找到 40°S。").then((didFinish) => {
+      if (didFinish && latitudeTaskState.phase === "calibration-1") {
+        setLatitudeLineInteraction(true);
+      }
+    });
   }
 
-  function startLatitudeCalibrationTwo() {
+  async function startLatitudeCalibrationTwo() {
     latitudeTaskState.phase = "calibration-2";
     latitudeTaskState.calibration2Errors = 0;
-    hideLatitudeDegreeLabels(true);
+    setLatitudeStageMode("calibration-two");
+    showCompleteLatitudeNotation();
+    hideLatitudeDegree(60);
     setLatitudeLineInteraction(false);
     latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
       group.classList.remove("is-calibration-target");
     });
+    getLatitudeLineGroup(0)?.classList.remove("is-equator");
     getLatitudeLineGroup(60)?.classList.add("is-calibration-target");
-    setLatitudeCopy({ prompt: "这条纬线的纬度是多少？" });
-    setLatitudeActions([
-      { label: "60°N", action: "answer-60-n" },
-      { label: "60°S", action: "answer-60-s" },
-    ]);
+    setLatitudeCopy();
+    setLatitudeActions();
+    const didFinish = await typeLatitudeQuestion("这条纬线的纬度是多少？");
+    if (didFinish && latitudeTaskState.phase === "calibration-2") {
+      setLatitudeActions([
+        { label: "60°N", action: "answer-60-n" },
+        { label: "60°S", action: "answer-60-s" },
+      ]);
+    }
   }
 
   function showLatitudeTaskEnding() {
     latitudeIntroStage.setAttribute("aria-hidden", "false");
     latitudeIntroStage.classList.add("is-visible");
+    latitudeIntroLine1.hidden = false;
     latitudeIntroLine1.textContent = "南北位置已经解决了。接下来，要想办法区分不同的经线。";
+    latitudeIntroLine2.hidden = true;
     latitudeIntroLine2.textContent = "";
     latitudeIntroTitle.textContent = "";
     latitudeIntroHint.textContent = "";
+    latitudeIntroHint.hidden = true;
     latitudeIntroStart.hidden = true;
   }
 
-  async function completeLatitudeTask() {
-    latitudeTaskState.phase = "complete";
+  function showLatitudeCalibrationSummary(saveCheckpoint = true) {
+    latitudeTaskState.phase = "calibration-summary";
+    setLatitudeStageMode("summary");
     latitudeTaskState.calibration2Complete = true;
     setLatitudeLineInteraction(false);
     latitudeTeachingLines.querySelectorAll(".latitude-line-group").forEach((group) => {
@@ -1946,19 +2235,24 @@
     showLatitudeDegree(0);
     showLatitudeDirection("north", "ns");
     showLatitudeDirection("south", "ns");
-    setLatitudeActions();
+    setLatitudeActions([{ label: "完成校准", action: "complete-calibration" }]);
     setLatitudeCopy({
       prompt: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
     });
+    if (saveCheckpoint) updateCheckpoint("latitude-calibration-complete");
+  }
+
+  async function completeLatitudeTask() {
+    latitudeTaskState.phase = "complete";
+    setLatitudeActions();
     markTaskComplete("latitude", "latitude-complete");
-    await wait(1500);
     scene.classList.remove("latitude-active");
     latitudeStage.setAttribute("aria-hidden", "true");
-    await wait(900);
+    await wait(700);
     updateLatitudeDevice();
     device.classList.add("is-found", "is-position-alert");
     setDeviceOpen(true);
-    showLatitudeTaskEnding();
+    showLongitudeTaskIntro(true);
   }
 
   function restoreLatitudeStart() {
@@ -2001,7 +2295,7 @@
     showLatitudeDirection("north", "ns");
     showLatitudeDirection("south", "ns");
     setLatitudeCopy({
-      feedback: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
+      prompt: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
     });
     setLatitudeActions([{ label: "进入定位校准", action: "start-calibration-1" }]);
   }
@@ -2014,13 +2308,927 @@
     startLatitudeCalibrationTwo();
   }
 
+  function restoreLatitudeCalibrationComplete() {
+    loadLatitudeTaskState();
+    activateLatitudeTeachingStage();
+    showLatitudeCalibrationSummary(false);
+  }
+
   function restoreLatitudeComplete() {
     prepareCompletedTaskOneWorld();
     latitudeTaskState.phase = "complete";
     updateLatitudeDevice();
     device.classList.add("is-found", "is-position-alert");
     setDeviceOpen(true);
-    showLatitudeTaskEnding();
+    showLongitudeTaskIntro(false);
+  }
+
+  function canonicalLongitude(value) {
+    const normalized = ((Number(value) + 180) % 360 + 360) % 360 - 180;
+    return normalized === 180 ? -180 : normalized;
+  }
+
+  function getLongitudePrimeViewRotation() {
+    return getFrontFacingLongitudeRotation(0, longitudeTeachingModel);
+  }
+
+  function setLongitudeCopy({ prompt = "", feedback = "" } = {}) {
+    longitudeQuestionSequence += 1;
+    longitudePrompt.classList.remove("is-typing-question");
+    longitudePrompt.removeAttribute("aria-busy");
+    longitudePrompt.textContent = prompt;
+    longitudeFeedback.textContent = feedback;
+  }
+
+  async function typeLongitudeQuestion(question) {
+    const sequence = ++longitudeQuestionSequence;
+    longitudePrompt.textContent = "";
+    longitudeFeedback.textContent = "";
+    longitudePrompt.classList.add("is-typing-question");
+    longitudePrompt.setAttribute("aria-busy", "true");
+    await wait(100);
+
+    for (const [characterIndex, character] of Array.from(question).entries()) {
+      if (sequence !== longitudeQuestionSequence) return false;
+      longitudePrompt.textContent += character;
+      playRecordTick(characterIndex);
+      await wait(46);
+    }
+
+    if (sequence !== longitudeQuestionSequence) return false;
+    longitudePrompt.classList.remove("is-typing-question");
+    longitudePrompt.removeAttribute("aria-busy");
+    return true;
+  }
+
+  function setLongitudeStageMode(mode = "default") {
+    longitudeStage.classList.remove(
+      "is-prime-layout",
+      "is-exploration-layout",
+      "is-calibration-layout",
+      "is-calibration-one",
+      "is-calibration-two",
+      "is-summary-layout",
+      "is-draggable",
+    );
+    if (mode === "prime") longitudeStage.classList.add("is-prime-layout");
+    if (mode === "exploration") longitudeStage.classList.add("is-exploration-layout");
+    if (mode === "calibration-one" || mode === "calibration-two") {
+      longitudeStage.classList.add(
+        "is-calibration-layout",
+        "is-draggable",
+        mode === "calibration-one" ? "is-calibration-one" : "is-calibration-two",
+      );
+    }
+    if (mode === "summary") longitudeStage.classList.add("is-summary-layout");
+  }
+
+  function setLongitudeActions(actions = []) {
+    longitudeActions.replaceChildren();
+    longitudeActions.classList.toggle(
+      "is-answer-actions",
+      actions.length > 0 && actions.every(({ action }) => action.startsWith("answer-")),
+    );
+    actions.forEach(({ label, action }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.dataset.longitudeAction = action;
+      longitudeActions.append(button);
+    });
+  }
+
+  function resetLongitudeTaskState() {
+    longitudeTaskState.phase = "idle";
+    longitudeTaskState.zeroAttempts = 0;
+    longitudeTaskState.zeroAttemptValues.length = 0;
+    longitudeTaskState.primeEstablished = false;
+    longitudeTaskState.exploredDirections.length = 0;
+    longitudeTaskState.ewEstablished = false;
+    longitudeTaskState.calibration1Complete = false;
+    longitudeTaskState.calibration2Complete = false;
+    longitudeTaskState.calibration1Errors = 0;
+    longitudeTaskState.calibration2Errors = 0;
+  }
+
+  function loadLongitudeTaskState() {
+    const savedState = progressData?.taskState?.longitude || getEmptyTaskState().longitude;
+    longitudeTaskState.zeroAttempts = Math.min(2, Math.max(0, Number(savedState.zeroAttempts) || 0));
+    longitudeTaskState.zeroAttemptValues.length = 0;
+    longitudeTaskState.zeroAttemptValues.push(...(savedState.zeroAttemptValues || []).map(Number).slice(0, 2));
+    longitudeTaskState.primeEstablished = Boolean(savedState.primeEstablished);
+    longitudeTaskState.exploredDirections.length = 0;
+    longitudeTaskState.exploredDirections.push(...savedState.exploredDirections);
+    longitudeTaskState.ewEstablished = Boolean(savedState.ewEstablished);
+    longitudeTaskState.calibration1Complete = Boolean(savedState.calibration1Complete);
+    longitudeTaskState.calibration2Complete = Boolean(savedState.calibration2Complete);
+    longitudeTaskState.calibration1Errors = 0;
+    longitudeTaskState.calibration2Errors = 0;
+  }
+
+  function updateLongitudeDevice(isComplete = false) {
+    deviceNetworkRow.hidden = false;
+    deviceNetworkValue.textContent = "经线、纬线";
+    deviceNorthValue.textContent = "纬度识别已恢复";
+    deviceEastValue.textContent = isComplete ? "经度识别已恢复" : "对应经线";
+    deviceSystemValue.textContent = isComplete ? "位置识别已恢复" : "仍未完成";
+    deviceSystemRow.classList.toggle("device-readout__fault", !isComplete);
+    deviceSystemRow.classList.toggle("device-readout__ready", isComplete);
+  }
+
+  function showLongitudeTaskIntro(animate = false) {
+    scene.classList.remove("latitude-active", "latitude-extracting", "longitude-active");
+    latitudeStage.setAttribute("aria-hidden", "true");
+    latitudeIntroStage.classList.remove("is-visible");
+    latitudeIntroStage.setAttribute("aria-hidden", "true");
+    longitudeStage.setAttribute("aria-hidden", "true");
+    longitudeIntroStage.setAttribute("aria-hidden", "false");
+    longitudeIntroStage.classList.add("is-visible");
+    longitudeIntroStart.hidden = true;
+    longitudeIntroStart.disabled = false;
+    longitudeIntroLead.textContent = animate ? "" : "东西定位，要借助经线。";
+    longitudeIntroQuestion.textContent = animate
+      ? ""
+      : "可是，这些经线看起来都一样，哪一条应该作为经度的0°线？";
+    longitudeIntroTitle.textContent = animate ? "" : "任务三：修复东西定位";
+
+    if (!animate) {
+      longitudeIntroStart.hidden = false;
+      return;
+    }
+
+    void (async () => {
+      await wait(500);
+      longitudeIntroLead.textContent = "东西定位，要借助经线。";
+      await wait(720);
+      longitudeIntroQuestion.textContent = "可是，这些经线看起来都一样，哪一条应该作为经度的0°线？";
+      await wait(820);
+      longitudeIntroTitle.textContent = "任务三：修复东西定位";
+      longitudeIntroStart.hidden = false;
+    })();
+  }
+
+  function createLongitudePathData(longitude, endLatitude) {
+    return pathDataFromValues(
+      (latitude) => getLongitudeTeachingPoint(longitude, latitude),
+      0,
+      endLatitude,
+      90,
+      longitudeTeachingModel,
+    );
+  }
+
+  function getLongitudeTeachingPoint(longitude, latitude) {
+    return getLongitudePoint(-longitude, latitude, longitudeTeachingModel.radius);
+  }
+
+  function createFrontSurfacePathData(pointFactory, start, end, steps) {
+    const projectedPoints = [];
+
+    for (let step = 0; step <= steps; step += 1) {
+      const value = start + ((end - start) * step) / steps;
+      projectedPoints.push(projectOrthographicPoint(pointFactory(value), longitudeTeachingModel));
+    }
+
+    const commands = [];
+    const appendPoint = (command, point) => {
+      commands.push(`${command} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`);
+    };
+    const getLimbIntersection = (from, to) => {
+      const depthRange = from.depth - to.depth;
+      const progress = depthRange === 0 ? 0 : from.depth / depthRange;
+      return {
+        x: from.x + (to.x - from.x) * progress,
+        y: from.y + (to.y - from.y) * progress,
+      };
+    };
+
+    let previous = projectedPoints[0];
+    let previousIsFront = previous.depth <= 0;
+    if (previousIsFront) appendPoint("M", previous);
+
+    for (let index = 1; index < projectedPoints.length; index += 1) {
+      const current = projectedPoints[index];
+      const currentIsFront = current.depth <= 0;
+
+      if (previousIsFront && currentIsFront) {
+        appendPoint("L", current);
+      } else if (previousIsFront && !currentIsFront) {
+        appendPoint("L", getLimbIntersection(previous, current));
+      } else if (!previousIsFront && currentIsFront) {
+        appendPoint("M", getLimbIntersection(previous, current));
+        appendPoint("L", current);
+      }
+
+      previous = current;
+      previousIsFront = currentIsFront;
+    }
+
+    return commands.join(" ");
+  }
+
+  function createFrontLongitudePathData(longitude, endLatitude) {
+    return createFrontSurfacePathData(
+      (latitude) => getLongitudeTeachingPoint(longitude, latitude),
+      0,
+      endLatitude,
+      90,
+    );
+  }
+
+  function getLongitudeLineGroup(longitude) {
+    const normalized = canonicalLongitude(longitude);
+    return longitudeTeachingLines.querySelector(
+      `.longitude-line-group[data-longitude="${normalized}"]`,
+    );
+  }
+
+  function getLongitudeDegreeLabel(direction, degree) {
+    if (degree === 180) {
+      return longitudeTeachingLabels.querySelector('.longitude-label[data-degree="180"]');
+    }
+    return longitudeTeachingLabels.querySelector(
+      `.longitude-label[data-direction="${direction}"][data-degree="${degree}"]`,
+    );
+  }
+
+  function updateLongitudeTeachingGeometry() {
+    longitudeTeachingModel.rotation.y = Number(longitudeTeachingModel.rotation.y);
+    longitudeTeachingLines.querySelectorAll(".longitude-line-group").forEach((group) => {
+      const longitude = Number(group.dataset.longitude);
+      const paths = group.querySelectorAll("path");
+      const northFrontData = createFrontLongitudePathData(longitude, 90);
+      const southFrontData = createFrontLongitudePathData(longitude, -90);
+      const northHitData = createLongitudePathData(longitude, 90);
+      const southHitData = createLongitudePathData(longitude, -90);
+      paths.forEach((path) => {
+        const isNorth = path.classList.contains("longitude-line--north");
+        const pathData = path.classList.contains("longitude-line-hit")
+          ? isNorth ? northHitData : southHitData
+          : isNorth ? northFrontData : southFrontData;
+        path.setAttribute("d", pathData);
+      });
+      const equatorHit = group.querySelector(".longitude-line-hit-node");
+      if (equatorHit) {
+        const equatorPoint = projectOrthographicPoint(
+          getLongitudeTeachingPoint(longitude, 0),
+          longitudeTeachingModel,
+        );
+        equatorHit.setAttribute("cx", equatorPoint.x.toFixed(2));
+        equatorHit.setAttribute("cy", equatorPoint.y.toFixed(2));
+      }
+    });
+
+    const equatorPaths = longitudeEquator.querySelectorAll("path");
+    if (equatorPaths.length === 2) {
+      equatorPaths[0].setAttribute("d", createFrontSurfacePathData(
+        (longitude) => getLatitudePoint(0, longitude, longitudeTeachingModel.radius),
+        0,
+        180,
+        180,
+      ));
+      equatorPaths[1].setAttribute("d", createFrontSurfacePathData(
+        (longitude) => getLatitudePoint(0, longitude, longitudeTeachingModel.radius),
+        0,
+        -180,
+        180,
+      ));
+    }
+
+    longitudeTeachingLabels.querySelectorAll(".longitude-label").forEach((label) => {
+      const longitude = Number(label.dataset.longitude);
+      const point = projectOrthographicPoint(
+        getLongitudeTeachingPoint(longitude, 0),
+        longitudeTeachingModel,
+      );
+      const isPrimeLabel = label.dataset.direction === "prime";
+      const isFront = isPrimeLabel ? point.depth < -0.94 : point.depth < -0.01;
+      if (isPrimeLabel) {
+        label.setAttribute("x", longitudeTeachingModel.center[0].toFixed(2));
+        label.setAttribute("y", (longitudeTeachingModel.center[1] - 44).toFixed(2));
+        label.setAttribute("text-anchor", "middle");
+      } else {
+        const isRight = point.x >= longitudeTeachingModel.center[0];
+        label.setAttribute("x", (point.x + (isRight ? 13 : -13)).toFixed(2));
+        label.setAttribute("y", (point.y + (isFront ? -16 : 30)).toFixed(2));
+        label.setAttribute("text-anchor", isRight ? "start" : "end");
+      }
+      label.classList.toggle("is-back", !isFront);
+      if (isPrimeLabel) {
+        label.dataset.longitude = "0";
+        label.textContent = "本初子午线 0°";
+      }
+      syncLongitudeLabelVisibility(label);
+    });
+
+    if (longitudeTeachingMarker.classList.contains("is-visible")) {
+      const longitude = Number(longitudeTeachingMarker.dataset.longitude || 0);
+      const point = projectOrthographicPoint(
+        getLongitudeTeachingPoint(longitude, 0),
+        longitudeTeachingModel,
+      );
+      longitudeTeachingMarker.setAttribute(
+        "transform",
+        `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)})`,
+      );
+    }
+  }
+
+  function buildLongitudeTeachingGlobe() {
+    longitudeTeachingLines.replaceChildren();
+    longitudeTeachingLabels.replaceChildren();
+    longitudeEquator.replaceChildren();
+    longitudeTeachingModel.rotation.y = getLongitudePrimeViewRotation();
+    longitudeSphereShell.setAttribute("d", createSphereShellPath("longitude", longitudeTeachingModel));
+
+    [180, -180].forEach((endLongitude, index) => {
+      longitudeEquator.append(createSvgElement("path", {
+        class: `longitude-equator-line longitude-equator-line--${index}`,
+        d: pathDataFromValues(
+          (longitude) => getLatitudePoint(0, longitude, longitudeTeachingModel.radius),
+          0,
+          endLongitude,
+          180,
+          longitudeTeachingModel,
+        ),
+      }));
+    });
+
+    longitudeTeachingValues.forEach((longitude) => {
+      const group = createSvgElement("g", {
+        class: `longitude-line-group${longitude === -180 ? " is-antimeridian" : ""}`,
+        "data-longitude": longitude,
+        role: "button",
+        tabindex: -1,
+        "aria-label": "经线候选",
+        "aria-disabled": "true",
+      });
+      [90, -90].forEach((endLatitude) => {
+        group.append(
+          createSvgElement("path", {
+            class: `longitude-line ${endLatitude > 0 ? "longitude-line--north" : "longitude-line--south"}`,
+            d: createFrontLongitudePathData(longitude, endLatitude),
+          }),
+          createSvgElement("path", {
+            class: `longitude-line-hit ${endLatitude > 0 ? "longitude-line--north" : "longitude-line--south"}`,
+            d: createLongitudePathData(longitude, endLatitude),
+          }),
+        );
+      });
+      const equatorPoint = projectOrthographicPoint(
+        getLongitudeTeachingPoint(longitude, 0),
+        longitudeTeachingModel,
+      );
+      group.append(createSvgElement("circle", {
+        class: "longitude-line-hit-node",
+        cx: equatorPoint.x.toFixed(2),
+        cy: equatorPoint.y.toFixed(2),
+        r: 13,
+      }));
+      longitudeTeachingLines.append(group);
+    });
+
+    const labelSpecs = [
+      { longitude: 0, degree: 0, direction: "prime", text: "本初子午线 0°" },
+      ...[30, 60, 90, 120, 150].map((degree) => ({
+        longitude: degree,
+        degree,
+        direction: "east",
+        text: `${degree}°`,
+      })),
+      ...[30, 60, 90, 120, 150].map((degree) => ({
+        longitude: -degree,
+        degree,
+        direction: "west",
+        text: `${degree}°`,
+      })),
+      { longitude: -180, degree: 180, direction: "shared", text: "180°" },
+    ];
+    labelSpecs.forEach((spec) => {
+      const label = createSvgElement("text", {
+        class: `longitude-label longitude-label--${spec.direction}`,
+        "data-longitude": spec.longitude,
+        "data-degree": spec.degree,
+        "data-direction": spec.direction,
+        "aria-hidden": "true",
+      });
+      label.textContent = spec.text;
+      longitudeTeachingLabels.append(label);
+    });
+    updateLongitudeTeachingGeometry();
+  }
+
+  function resetLongitudeTeachingVisuals() {
+    longitudeTeachingLines.querySelectorAll(".longitude-line-group").forEach((group) => {
+      group.classList.remove(
+        "is-interactive",
+        "is-attempted",
+        "is-prime",
+        "is-calibration-target",
+        "is-error-flash",
+      );
+    });
+    longitudeTeachingLabels.querySelectorAll(".longitude-label").forEach((label) => {
+      label.classList.remove("is-visible", "is-target-hidden");
+      label.setAttribute("aria-hidden", "true");
+    });
+    longitudeTeachingMarker.classList.remove("is-visible", "is-moving");
+    longitudeTeachingMarker.setAttribute("aria-hidden", "true");
+  }
+
+  function setLongitudeLineInteraction(isInteractive) {
+    longitudeTeachingLines.querySelectorAll(".longitude-line-group").forEach((group) => {
+      group.classList.toggle("is-interactive", isInteractive);
+      group.setAttribute("tabindex", isInteractive ? "0" : "-1");
+      group.setAttribute("aria-disabled", String(!isInteractive));
+      group.querySelectorAll(".longitude-line-hit, .longitude-line-hit-node").forEach((hitArea) => {
+        hitArea.style.pointerEvents = isInteractive
+          ? hitArea.classList.contains("longitude-line-hit-node") ? "all" : "stroke"
+          : "none";
+      });
+    });
+  }
+
+  function showLongitudeLabel(direction, degree, notation = "plain") {
+    const label = getLongitudeDegreeLabel(direction, degree);
+    if (!label) return;
+    if (degree === 0) {
+      label.textContent = "本初子午线 0°";
+    } else if (degree === 180) {
+      label.textContent = "180°";
+    } else {
+      const suffix = notation === "ew" ? (direction === "east" ? "E" : "W") : "";
+      label.textContent = `${degree}°${suffix}`;
+    }
+    label.classList.add("is-visible");
+    label.classList.remove("is-target-hidden");
+    syncLongitudeLabelVisibility(label);
+  }
+
+  function syncLongitudeLabelVisibility(label) {
+    const shouldDisplay = label.classList.contains("is-visible")
+      && !label.classList.contains("is-back")
+      && !label.classList.contains("is-target-hidden");
+    label.setAttribute("aria-hidden", String(!shouldDisplay));
+  }
+
+  function hideLongitudeLabels(keepPrime = true) {
+    longitudeTeachingLabels.querySelectorAll(".longitude-label").forEach((label) => {
+      const shouldRemain = keepPrime && label.dataset.direction === "prime";
+      label.classList.toggle("is-visible", shouldRemain);
+      label.classList.remove("is-target-hidden");
+      label.setAttribute("aria-hidden", String(!shouldRemain));
+    });
+  }
+
+  function showLongitudeDirection(direction, notation = "plain") {
+    [30, 60, 90, 120, 150].forEach((degree) => showLongitudeLabel(direction, degree, notation));
+    showLongitudeLabel("shared", 180);
+  }
+
+  function showCompleteLongitudeNotation(notation = "ew") {
+    showLongitudeLabel("prime", 0);
+    showLongitudeDirection("east", notation);
+    showLongitudeDirection("west", notation);
+    showLongitudeLabel("shared", 180);
+  }
+
+  function setLongitudeMarker(longitude) {
+    const point = projectOrthographicPoint(
+      getLongitudeTeachingPoint(longitude, 0),
+      longitudeTeachingModel,
+    );
+    longitudeTeachingMarker.setAttribute(
+      "transform",
+      `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)})`,
+    );
+    longitudeTeachingMarker.dataset.longitude = Number(longitude).toFixed(2);
+    longitudeTeachingMarker.classList.add("is-visible");
+    longitudeTeachingMarker.setAttribute("aria-hidden", "false");
+  }
+
+  function hideLongitudeMarker() {
+    longitudeTeachingMarker.classList.remove("is-visible", "is-moving");
+    longitudeTeachingMarker.setAttribute("aria-hidden", "true");
+  }
+
+  function establishPrimeVisual() {
+    longitudeTeachingLines.querySelectorAll(".longitude-line-group.is-prime").forEach((group) => {
+      group.classList.remove("is-prime");
+    });
+    const primeGroup = longitudeTeachingLines.querySelector(
+      '.longitude-line-group[data-longitude="0"]',
+    );
+    primeGroup?.classList.add("is-prime");
+    const primeLabel = longitudeTeachingLabels.querySelector(
+      '.longitude-label[data-direction="prime"]',
+    );
+    if (primeLabel) {
+      primeLabel.dataset.longitude = "0";
+      primeLabel.dataset.degree = "0";
+      primeLabel.textContent = "本初子午线 0°";
+    }
+    showLongitudeLabel("prime", 0);
+  }
+
+  function activateLongitudeTeachingStage() {
+    prepareCompletedTaskOneWorld();
+    updateLatitudeDevice();
+    latitudeIntroStage.classList.remove("is-visible");
+    latitudeIntroStage.setAttribute("aria-hidden", "true");
+    latitudeStage.setAttribute("aria-hidden", "true");
+    longitudeIntroStage.classList.remove("is-visible");
+    longitudeIntroStage.setAttribute("aria-hidden", "true");
+    longitudeStage.setAttribute("aria-hidden", "false");
+    scene.classList.add("longitude-active");
+    setLongitudeStageMode();
+    buildLongitudeTeachingGlobe();
+    resetLongitudeTeachingVisuals();
+    setLongitudeActions();
+    setLongitudeCopy();
+  }
+
+  function prepareLongitudeZeroQuestion() {
+    longitudeTaskState.phase = "zero-question";
+    setLongitudeStageMode();
+    setLongitudeLineInteraction(true);
+    setLongitudeCopy({ prompt: "这些经线看起来都一样，哪一条应该作为经度的0°线？" });
+    setLongitudeActions();
+  }
+
+  async function startLongitudeTask() {
+    resetLongitudeTaskState();
+    updateCheckpoint("longitude-start");
+    longitudeIntroStart.disabled = true;
+    longitudeIntroStage.classList.remove("is-visible");
+    longitudeIntroStage.setAttribute("aria-hidden", "true");
+    await wait(650);
+    activateLongitudeTeachingStage();
+    await wait(420);
+    prepareLongitudeZeroQuestion();
+  }
+
+  function showLongitudeZeroConflict() {
+    longitudeTaskState.phase = "zero-conflict";
+    setLongitudeLineInteraction(false);
+    setLongitudeCopy({
+      prompt: "既然没有一条经线天然适合作为0°，那该怎么办？",
+      feedback: "换一条也是一样。看来，经线中没有一条天然特别。",
+    });
+    setLongitudeActions([{ label: "继续", action: "reveal-prime" }]);
+  }
+
+  async function revealPrimeMeridian() {
+    longitudeTaskState.phase = "prime-reveal";
+    setLongitudeStageMode("prime");
+    setLongitudeActions();
+    setLongitudeCopy({
+      prompt: "1884年国际经度会议规定：通过英国格林尼治天文台旧址的那条经线作为0°经线。“本初”的原意是起点，因此称为本初子午线。",
+    });
+    longitudeTeachingModel.rotation.y = getLongitudePrimeViewRotation();
+    updateLongitudeTeachingGeometry();
+    longitudeTeachingLines.querySelectorAll(".longitude-line-group.is-attempted").forEach((group) => {
+      group.classList.remove("is-attempted");
+    });
+    establishPrimeVisual();
+    await wait(1500);
+    longitudeTaskState.primeEstablished = true;
+    longitudeTaskState.phase = "prime-established";
+    updateCheckpoint("longitude-prime-established");
+    setLongitudeActions([{ label: "继续", action: "continue-after-prime" }]);
+  }
+
+  function showLongitudeExplorationChoices() {
+    longitudeTaskState.phase = "choose-direction";
+    setLongitudeStageMode("exploration");
+    setLongitudeLineInteraction(false);
+    establishPrimeVisual();
+    setLongitudeMarker(0);
+    setLongitudeCopy({
+      prompt: longitudeTaskState.exploredDirections.length
+        ? "回到本初子午线0°，再探索另一边。"
+        : "从本初子午线0°出发，选择一个方向进行探索。",
+    });
+    const actions = [];
+    if (!longitudeTaskState.exploredDirections.includes("east")) {
+      actions.push({ label: "向东探索", action: "explore-east" });
+    }
+    if (!longitudeTaskState.exploredDirections.includes("west")) {
+      actions.push({ label: "向西探索", action: "explore-west" });
+    }
+    setLongitudeActions(actions);
+  }
+
+  function animateLongitudeDirection(direction) {
+    const sign = direction === "east" ? 1 : -1;
+    const duration = 7600;
+    const primeRotation = getLongitudePrimeViewRotation();
+    let startTime = null;
+    let nextDegreeIndex = 0;
+    longitudeTeachingMarker.classList.add("is-moving");
+
+    return new Promise((resolve) => {
+      function renderFrame(timestamp) {
+        if (startTime === null) startTime = timestamp;
+        const rawProgress = Math.min(1, (timestamp - startTime) / duration);
+        const easedProgress = rawProgress * rawProgress * (3 - 2 * rawProgress);
+        const longitude = sign * 180 * easedProgress;
+        longitudeTeachingModel.rotation.y = primeRotation + longitude;
+        updateLongitudeTeachingGeometry();
+        setLongitudeMarker(longitude);
+
+        while (
+          nextDegreeIndex < longitudeDegreeValues.length
+          && Math.abs(longitude) >= longitudeDegreeValues[nextDegreeIndex]
+        ) {
+          showLongitudeLabel(direction, longitudeDegreeValues[nextDegreeIndex]);
+          nextDegreeIndex += 1;
+        }
+
+        if (rawProgress < 1) {
+          window.requestAnimationFrame(renderFrame);
+          return;
+        }
+        longitudeTeachingMarker.classList.remove("is-moving");
+        resolve();
+      }
+      window.requestAnimationFrame(renderFrame);
+    });
+  }
+
+  function animateLongitudeReturn(direction) {
+    const startLongitude = direction === "east" ? 180 : -180;
+    const startRotation = longitudeTeachingModel.rotation.y;
+    const primeRotation = getLongitudePrimeViewRotation();
+    const duration = 1900;
+    let startTime = null;
+    longitudeTeachingMarker.classList.add("is-moving");
+
+    return new Promise((resolve) => {
+      function renderFrame(timestamp) {
+        if (startTime === null) startTime = timestamp;
+        const rawProgress = Math.min(1, (timestamp - startTime) / duration);
+        const easedProgress = 1 - Math.pow(1 - rawProgress, 3);
+        const longitude = startLongitude * (1 - easedProgress);
+        longitudeTeachingModel.rotation.y = startRotation
+          + (primeRotation - startRotation) * easedProgress;
+        updateLongitudeTeachingGeometry();
+        setLongitudeMarker(longitude);
+        if (rawProgress < 1) {
+          window.requestAnimationFrame(renderFrame);
+          return;
+        }
+        longitudeTeachingMarker.classList.remove("is-moving");
+        resolve();
+      }
+      window.requestAnimationFrame(renderFrame);
+    });
+  }
+
+  function showBothLongitudeSidesQuestion() {
+    longitudeTaskState.phase = "both-sides-question";
+    setLongitudeStageMode();
+    longitudeTeachingModel.rotation.y = getLongitudePrimeViewRotation();
+    updateLongitudeTeachingGeometry();
+    hideLongitudeMarker();
+    showCompleteLongitudeNotation("plain");
+    setLongitudeCopy({
+      prompt: "东西两边都有相同的度数，怎样区分它们在本初子午线的哪一边？",
+    });
+    setLongitudeActions([{ label: "继续", action: "establish-ew" }]);
+  }
+
+  async function exploreLongitudeDirection(direction) {
+    if (longitudeTaskState.exploredDirections.includes(direction)) return;
+    longitudeTaskState.phase = `exploring-${direction}`;
+    setLongitudeActions();
+    establishPrimeVisual();
+    setLongitudeCopy({
+      prompt: direction === "east"
+        ? "定位点沿赤道向东移动，观察经度怎样变化。"
+        : "定位点沿赤道向西移动，观察经度怎样变化。",
+    });
+    setLongitudeMarker(0);
+    await animateLongitudeDirection(direction);
+    await wait(700);
+    longitudeTaskState.exploredDirections.push(direction);
+    await animateLongitudeReturn(direction);
+
+    if (longitudeTaskState.exploredDirections.length === 1) {
+      updateCheckpoint("longitude-one-side-complete");
+      showLongitudeExplorationChoices();
+      return;
+    }
+
+    updateCheckpoint("longitude-both-sides-complete");
+    showBothLongitudeSidesQuestion();
+  }
+
+  async function establishLongitudeNotation() {
+    longitudeTaskState.phase = "establishing-ew";
+    setLongitudeStageMode();
+    setLongitudeActions();
+    showCompleteLongitudeNotation("plain");
+    setLongitudeCopy({ prompt: "本初子午线以东，叫东经，用 E 表示。" });
+    for (const degree of [30, 60, 90, 120, 150]) {
+      showLongitudeLabel("east", degree, "ew");
+      await wait(430);
+    }
+    await wait(950);
+    setLongitudeCopy({ prompt: "本初子午线以西，叫西经，用 W 表示。" });
+    for (const degree of [30, 60, 90, 120, 150]) {
+      showLongitudeLabel("west", degree, "ew");
+      await wait(430);
+    }
+    await wait(850);
+    longitudeTaskState.ewEstablished = true;
+    updateCheckpoint("longitude-ew-complete");
+    setLongitudeCopy({
+      prompt: "经度从本初子午线的0°开始，向东、向西逐渐增大，到180°。",
+    });
+    setLongitudeActions([{ label: "进入定位校准", action: "start-longitude-calibration-1" }]);
+  }
+
+  function startLongitudeCalibrationOne(animateQuestion = true) {
+    longitudeTaskState.phase = "longitude-calibration-1";
+    longitudeTaskState.calibration1Errors = 0;
+    setLongitudeStageMode("calibration-one");
+    longitudeTeachingModel.rotation.y = getLongitudePrimeViewRotation();
+    updateLongitudeTeachingGeometry();
+    showCompleteLongitudeNotation("ew");
+    setLongitudeLineInteraction(false);
+    setLongitudeCopy();
+    setLongitudeActions();
+    const enableInteraction = () => {
+      if (longitudeTaskState.phase === "longitude-calibration-1") {
+        setLongitudeLineInteraction(true);
+      }
+    };
+    if (animateQuestion) {
+      void typeLongitudeQuestion("校准1：请找到 60°W。").then((didFinish) => {
+        if (didFinish) enableInteraction();
+      });
+    } else {
+      setLongitudeCopy({ prompt: "校准1：请找到 60°W。" });
+      enableInteraction();
+    }
+  }
+
+  async function startLongitudeCalibrationTwo(animateQuestion = true) {
+    longitudeTaskState.phase = "longitude-calibration-2";
+    longitudeTaskState.calibration2Errors = 0;
+    setLongitudeStageMode("calibration-two");
+    longitudeTeachingModel.rotation.y = 30;
+    updateLongitudeTeachingGeometry();
+    showCompleteLongitudeNotation("ew");
+    setLongitudeLineInteraction(false);
+    longitudeTeachingLines.querySelectorAll(".longitude-line-group").forEach((group) => {
+      group.classList.remove("is-calibration-target");
+    });
+    getLongitudeLineGroup(150)?.classList.add("is-calibration-target");
+    const targetLabel = getLongitudeDegreeLabel("east", 150);
+    targetLabel?.classList.add("is-target-hidden");
+    targetLabel?.setAttribute("aria-hidden", "true");
+    setLongitudeCopy();
+    setLongitudeActions();
+    const showAnswers = () => {
+      if (longitudeTaskState.phase === "longitude-calibration-2") {
+        setLongitudeActions([
+          { label: "150°E", action: "answer-150-e" },
+          { label: "150°W", action: "answer-150-w" },
+        ]);
+      }
+    };
+    if (animateQuestion) {
+      const didFinish = await typeLongitudeQuestion("这条经线的经度是多少？");
+      if (didFinish) showAnswers();
+    } else {
+      setLongitudeCopy({ prompt: "这条经线的经度是多少？" });
+      showAnswers();
+    }
+  }
+
+  function showLongitudeCalibrationSummary(saveCheckpoint = true) {
+    longitudeTaskState.phase = "longitude-calibration-summary";
+    longitudeTaskState.calibration2Complete = true;
+    setLongitudeStageMode("summary");
+    setLongitudeLineInteraction(false);
+    longitudeTeachingModel.rotation.y = getLongitudePrimeViewRotation();
+    longitudeTeachingLines.querySelectorAll(".longitude-line-group").forEach((group) => {
+      group.classList.remove("is-calibration-target");
+    });
+    updateLongitudeTeachingGeometry();
+    showCompleteLongitudeNotation("ew");
+    hideLongitudeMarker();
+    setLongitudeCopy({
+      prompt: "经度从本初子午线的0°开始，向东、向西逐渐增大，到180°。",
+    });
+    setLongitudeActions([{ label: "完成校准", action: "complete-longitude-calibration" }]);
+    if (saveCheckpoint) updateCheckpoint("longitude-calibration-complete");
+  }
+
+  async function completeLongitudeTask() {
+    longitudeTaskState.phase = "complete";
+    setLongitudeActions();
+    markTaskComplete("longitude", "longitude-complete");
+    scene.classList.remove("longitude-active");
+    longitudeStage.setAttribute("aria-hidden", "true");
+    await wait(700);
+    updateLongitudeDevice(true);
+    device.classList.add("is-found", "is-position-alert");
+    setDeviceOpen(true);
+  }
+
+  function restoreLongitudeStart() {
+    resetLongitudeTaskState();
+    activateLongitudeTeachingStage();
+    prepareLongitudeZeroQuestion();
+  }
+
+  function restoreLongitudeOneZeroAttempt() {
+    loadLongitudeTaskState();
+    activateLongitudeTeachingStage();
+    longitudeTaskState.phase = "zero-question";
+    longitudeTaskState.zeroAttemptValues.forEach((value) => {
+      getLongitudeLineGroup(value)?.classList.add("is-attempted");
+    });
+    setLongitudeLineInteraction(true);
+    setLongitudeCopy({
+      prompt: "再换一条经线看看。",
+      feedback: "这条经线与其他经线没有什么不同，长度都是相等的。",
+    });
+  }
+
+  function restoreLongitudeZeroConflictComplete() {
+    loadLongitudeTaskState();
+    activateLongitudeTeachingStage();
+    longitudeTaskState.zeroAttemptValues.forEach((value) => {
+      getLongitudeLineGroup(value)?.classList.add("is-attempted");
+    });
+    showLongitudeZeroConflict();
+  }
+
+  function restoreLongitudePrimeEstablished() {
+    loadLongitudeTaskState();
+    activateLongitudeTeachingStage();
+    setLongitudeStageMode("prime");
+    establishPrimeVisual();
+    longitudeTaskState.phase = "prime-established";
+    setLongitudeCopy({
+      prompt: "1884年国际经度会议规定：通过英国格林尼治天文台旧址的那条经线作为0°经线。“本初”的原意是起点，因此称为本初子午线。",
+    });
+    setLongitudeActions([{ label: "继续", action: "continue-after-prime" }]);
+  }
+
+  function restoreLongitudeOneSideComplete() {
+    loadLongitudeTaskState();
+    activateLongitudeTeachingStage();
+    establishPrimeVisual();
+    longitudeTaskState.exploredDirections.forEach((direction) => {
+      showLongitudeDirection(direction);
+    });
+    showLongitudeExplorationChoices();
+  }
+
+  function restoreLongitudeBothSidesComplete() {
+    loadLongitudeTaskState();
+    activateLongitudeTeachingStage();
+    establishPrimeVisual();
+    showBothLongitudeSidesQuestion();
+  }
+
+  function restoreLongitudeNotationComplete() {
+    loadLongitudeTaskState();
+    activateLongitudeTeachingStage();
+    establishPrimeVisual();
+    showCompleteLongitudeNotation("ew");
+    longitudeTaskState.phase = "ew-complete";
+    setLongitudeCopy({
+      prompt: "经度从本初子午线的0°开始，向东、向西逐渐增大，到180°。",
+    });
+    setLongitudeActions([{ label: "进入定位校准", action: "start-longitude-calibration-1" }]);
+  }
+
+  function restoreLongitudeCalibrationOneComplete() {
+    loadLongitudeTaskState();
+    activateLongitudeTeachingStage();
+    establishPrimeVisual();
+    void startLongitudeCalibrationTwo(false);
+  }
+
+  function restoreLongitudeCalibrationComplete() {
+    loadLongitudeTaskState();
+    activateLongitudeTeachingStage();
+    establishPrimeVisual();
+    showLongitudeCalibrationSummary(false);
+  }
+
+  function restoreLongitudeComplete() {
+    prepareCompletedTaskOneWorld();
+    longitudeTaskState.phase = "complete";
+    updateLongitudeDevice(true);
+    device.classList.add("is-found", "is-position-alert");
+    setDeviceOpen(true);
   }
 
   function updateSignalGuidePosition() {
@@ -2121,6 +3329,21 @@
     await wait(520);
     record.classList.remove("is-emphasized");
     return result;
+  }
+
+  function applyScanRecordKnowledgeLabels() {
+    const knowledgeLabels = {
+      longitude: "经线",
+      latitude: "纬线",
+      relationship: "经纬线关系",
+    };
+    scanRecords.querySelectorAll(".scan-record").forEach((record, index) => {
+      const label = record.querySelector("small");
+      const recordType = scanHistory[index];
+      if (label && knowledgeLabels[recordType]) {
+        label.textContent = knowledgeLabels[recordType];
+      }
+    });
   }
 
   async function addScanRecord(type) {
@@ -2596,6 +3819,17 @@
     latitudeTeachingLines.replaceChildren();
     latitudeTeachingLabels.replaceChildren();
     hideLatitudeMarker();
+    longitudeIntroStage.classList.remove("is-visible");
+    longitudeIntroStage.setAttribute("aria-hidden", "true");
+    longitudeIntroStart.hidden = false;
+    longitudeIntroStart.disabled = false;
+    longitudeStage.setAttribute("aria-hidden", "true");
+    longitudeActions.replaceChildren();
+    setLongitudeCopy();
+    longitudeTeachingLines.replaceChildren();
+    longitudeTeachingLabels.replaceChildren();
+    longitudeEquator.replaceChildren();
+    hideLongitudeMarker();
     clearNetworkFocus();
     clearPositionTrackEffects();
     positionTestLayer.classList.remove("is-visible", "is-moving");
@@ -2676,10 +3910,12 @@
       completed: true,
       finalRelationship: true,
     });
+    applyScanRecordKnowledgeLabels();
   }
 
   function preparePositionTestRestore() {
     prepareCompletedTaskOneWorld();
+    applyScanRecordKnowledgeLabels();
     investigationPhase = "position-test";
     taskReminder.classList.remove("is-visible");
     scene.classList.add("position-test-active");
@@ -2794,8 +4030,41 @@
       case "latitude-calibration-1-complete":
         restoreLatitudeCalibrationOneComplete();
         break;
+      case "latitude-calibration-complete":
+        restoreLatitudeCalibrationComplete();
+        break;
       case "latitude-complete":
         restoreLatitudeComplete();
+        break;
+      case "longitude-start":
+        restoreLongitudeStart();
+        break;
+      case "longitude-one-zero-attempt":
+        restoreLongitudeOneZeroAttempt();
+        break;
+      case "longitude-zero-conflict-complete":
+        restoreLongitudeZeroConflictComplete();
+        break;
+      case "longitude-prime-established":
+        restoreLongitudePrimeEstablished();
+        break;
+      case "longitude-one-side-complete":
+        restoreLongitudeOneSideComplete();
+        break;
+      case "longitude-both-sides-complete":
+        restoreLongitudeBothSidesComplete();
+        break;
+      case "longitude-ew-complete":
+        restoreLongitudeNotationComplete();
+        break;
+      case "longitude-calibration-1-complete":
+        restoreLongitudeCalibrationOneComplete();
+        break;
+      case "longitude-calibration-complete":
+        restoreLongitudeCalibrationComplete();
+        break;
+      case "longitude-complete":
+        restoreLongitudeComplete();
         break;
       default:
         beginOpening();
@@ -2868,7 +4137,8 @@
       .forEach((task) => {
         const isCurrent = progressData.currentTask === task.id
           && progressData.checkpoint !== "position-test-complete"
-          && progressData.checkpoint !== "latitude-complete";
+          && progressData.checkpoint !== "latitude-complete"
+          && progressData.checkpoint !== "longitude-complete";
         const isCompleted = progressData.completedTasks.includes(task.id);
         const hasSavedCheckpoint = Boolean(progressData.taskCheckpoints?.[task.id]);
         const row = document.createElement("button");
@@ -2961,7 +4231,7 @@
     if (latitudeTaskState.phase === "equator-question") {
       if (latitude !== 0) {
         setLatitudeCopy({
-          prompt: "你认为哪条纬线适合作为纬度的0度线？",
+          prompt: "先找一找，哪一条纬线适合作为0°。",
           feedback: "再看看，哪条纬线正好环绕地球的中间，并且是最长的纬线圈？",
         });
         return;
@@ -2971,21 +4241,32 @@
       latitudeTaskState.equatorFound = true;
       setLatitudeLineInteraction(false);
       getLatitudeLineGroup(0)?.classList.add("is-equator");
+      showLatitudeDegree(0);
       setLatitudeCopy({
-        feedback: "这条纬线正好环绕地球的中间，而且是最长的纬线圈。",
+        prompt: "这条纬线正好环绕地球的中间，而且是最长的纬线圈。",
+        feedback: "它叫赤道，是纬度的0°线。",
       });
-      setLatitudeActions([{ label: "继续", action: "confirm-equator" }]);
+      setLatitudeActions([{ label: "继续", action: "continue-after-equator" }]);
       return;
     }
 
     if (latitudeTaskState.phase !== "calibration-1") return;
     if (latitude !== -40) {
       latitudeTaskState.calibration1Errors += 1;
+      const firstErrorFeedback = latitude > 0
+        ? "目标是40°S，先看看它应该在赤道的哪一边。"
+        : latitude === 0
+          ? "40°S在赤道以南。"
+          : "方向对了，再看看度数：目标是40°S。";
+      const errorGroup = getLatitudeLineGroup(latitude);
+      errorGroup?.classList.remove("is-error-flash");
+      window.requestAnimationFrame(() => errorGroup?.classList.add("is-error-flash"));
+      window.setTimeout(() => errorGroup?.classList.remove("is-error-flash"), 620);
       setLatitudeCopy({
         prompt: "校准1：请找到 40°S。",
         feedback: latitudeTaskState.calibration1Errors === 1
-          ? "再看看它在赤道的哪一边。"
-          : "赤道以北是北纬N，赤道以南是南纬S。",
+          ? firstErrorFeedback
+          : "S表示南纬；找到赤道以南的40°纬线。",
       });
       return;
     }
@@ -2997,7 +4278,7 @@
     showLatitudeDegree(-40, "ns");
     setLatitudeCopy({ feedback: "40°S，定位匹配。" });
     updateCheckpoint("latitude-calibration-1-complete");
-    window.setTimeout(startLatitudeCalibrationTwo, 950);
+    window.setTimeout(startLatitudeCalibrationTwo, 1750);
   }
 
   latitudeTeachingLines.addEventListener("click", (event) => {
@@ -3021,12 +4302,10 @@
     if (!actionButton) return;
     const action = actionButton.dataset.latitudeAction;
 
-    if (action === "confirm-equator" && latitudeTaskState.phase === "equator-confirmed") {
+    if (action === "continue-after-equator" && latitudeTaskState.phase === "equator-confirmed") {
       setLatitudeActions();
-      setLatitudeCopy({ feedback: "把它定为纬度的0°线。它叫赤道。" });
-      showLatitudeDegree(0);
       updateCheckpoint("latitude-equator-found");
-      window.setTimeout(showLatitudeExplorationChoices, 950);
+      showLatitudeExplorationChoices();
       return;
     }
 
@@ -3048,14 +4327,19 @@
       return;
     }
 
+    if (action === "complete-calibration" && latitudeTaskState.phase === "calibration-summary") {
+      void completeLatitudeTask();
+      return;
+    }
+
     if (latitudeTaskState.phase !== "calibration-2") return;
     if (action === "answer-60-s") {
       latitudeTaskState.calibration2Errors += 1;
       setLatitudeCopy({
         prompt: "这条纬线的纬度是多少？",
         feedback: latitudeTaskState.calibration2Errors === 1
-          ? "再看看它在赤道的哪一边。"
-          : "赤道以北是北纬N，赤道以南是南纬S。",
+          ? "高亮的纬线在赤道以北，再判断应该用N还是S。"
+          : "赤道以北是北纬，用N表示。",
       });
       return;
     }
@@ -3065,8 +4349,213 @@
       latitudeTaskState.calibration2Complete = true;
       showLatitudeDegree(60, "ns");
       setLatitudeActions();
-      setLatitudeCopy({ feedback: "60°N，定位匹配。" });
-      window.setTimeout(() => void completeLatitudeTask(), 850);
+      setLatitudeCopy({
+        prompt: "这条纬线的纬度是多少？",
+        feedback: "判断正确，这是60°N。",
+      });
+      window.setTimeout(() => showLatitudeCalibrationSummary(), 1750);
+    }
+  });
+
+  longitudeIntroStart.addEventListener("click", () => {
+    void startLongitudeTask();
+  });
+
+  function flashLongitudeError(longitude) {
+    const group = getLongitudeLineGroup(longitude);
+    group?.classList.remove("is-error-flash");
+    window.requestAnimationFrame(() => group?.classList.add("is-error-flash"));
+    window.setTimeout(() => group?.classList.remove("is-error-flash"), 620);
+  }
+
+  function handleLongitudeLineSelection(longitude) {
+    const normalized = canonicalLongitude(longitude);
+    if (longitudeTaskState.phase === "zero-question") {
+      if (longitudeTaskState.zeroAttemptValues.includes(normalized)) {
+        setLongitudeCopy({
+          prompt: "再换一条经线看看。",
+          feedback: "请点击另一条经线进行比较。",
+        });
+        return;
+      }
+
+      longitudeTaskState.zeroAttempts += 1;
+      longitudeTaskState.zeroAttemptValues.push(normalized);
+      getLongitudeLineGroup(normalized)?.classList.add("is-attempted");
+      if (longitudeTaskState.zeroAttempts === 1) {
+        setLongitudeCopy({
+          prompt: "再换一条经线看看。",
+          feedback: "这条经线与其他经线没有什么不同，长度都是相等的。",
+        });
+        updateCheckpoint("longitude-one-zero-attempt");
+        return;
+      }
+
+      updateCheckpoint("longitude-zero-conflict-complete");
+      showLongitudeZeroConflict();
+      return;
+    }
+
+    if (longitudeTaskState.phase !== "longitude-calibration-1") return;
+    if (normalized !== -60) {
+      longitudeTaskState.calibration1Errors += 1;
+      flashLongitudeError(normalized);
+      let firstFeedback = "W表示西经；找到本初子午线以西的60°经线。";
+      if (normalized > 0 && normalized < 180) {
+        firstFeedback = "目标是60°W，先看看它在本初子午线的哪一边。";
+      } else if (normalized === 0) {
+        firstFeedback = "60°W在本初子午线以西。";
+      } else if (normalized < 0 && normalized > -180) {
+        firstFeedback = "方向对了，再看看度数：目标是60°W。";
+      }
+      setLongitudeCopy({
+        prompt: "校准1：请找到 60°W。",
+        feedback: longitudeTaskState.calibration1Errors === 1
+          ? firstFeedback
+          : "W表示西经；找到本初子午线以西的60°经线。",
+      });
+      return;
+    }
+
+    longitudeTaskState.phase = "longitude-calibration-1-complete";
+    longitudeTaskState.calibration1Complete = true;
+    setLongitudeLineInteraction(false);
+    getLongitudeLineGroup(-60)?.classList.add("is-calibration-target");
+    showLongitudeLabel("west", 60, "ew");
+    setLongitudeCopy({ feedback: "60°W，定位匹配。" });
+    updateCheckpoint("longitude-calibration-1-complete");
+    window.setTimeout(() => void startLongitudeCalibrationTwo(), 1750);
+  }
+
+  longitudeTeachingLines.addEventListener("click", (event) => {
+    if (longitudeDragState.suppressClick) return;
+    if (longitudeStage.classList.contains("is-draggable")) return;
+    const hitArea = event.target.closest(".longitude-line-hit, .longitude-line-hit-node");
+    if (!hitArea) return;
+    const longitude = Number(hitArea.closest(".longitude-line-group")?.dataset.longitude);
+    if (Number.isFinite(longitude)) handleLongitudeLineSelection(longitude);
+  });
+
+  longitudeTeachingLines.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const group = event.target.closest(".longitude-line-group.is-interactive");
+    if (!group) return;
+    event.preventDefault();
+    const longitude = Number(group.dataset.longitude);
+    if (Number.isFinite(longitude)) handleLongitudeLineSelection(longitude);
+  });
+
+  longitudeGlobe.addEventListener("pointerdown", (event) => {
+    if (!longitudeStage.classList.contains("is-draggable")) return;
+    longitudeDragState.active = true;
+    longitudeDragState.pointerId = event.pointerId;
+    longitudeDragState.startX = event.clientX;
+    longitudeDragState.startY = event.clientY;
+    longitudeDragState.startRotation = longitudeTeachingModel.rotation.y;
+    const targetGroup = event.target.closest(".longitude-line-hit, .longitude-line-hit-node")
+      ?.closest(".longitude-line-group");
+    longitudeDragState.targetLongitude = targetGroup
+      ? Number(targetGroup.dataset.longitude)
+      : null;
+    longitudeDragState.moved = false;
+    longitudeDragState.suppressClick = false;
+    longitudeGlobe.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+
+  longitudeGlobe.addEventListener("pointermove", (event) => {
+    if (!longitudeDragState.active || event.pointerId !== longitudeDragState.pointerId) return;
+    const deltaX = event.clientX - longitudeDragState.startX;
+    const deltaY = event.clientY - longitudeDragState.startY;
+    if (Math.hypot(deltaX, deltaY) > 7) longitudeDragState.moved = true;
+    if (longitudeDragState.moved) {
+      longitudeTeachingModel.rotation.y = longitudeDragState.startRotation + deltaX * 0.34;
+      updateLongitudeTeachingGeometry();
+    }
+    event.preventDefault();
+  });
+
+  function finishLongitudeDrag(event, allowSelection = true) {
+    if (!longitudeDragState.active || event.pointerId !== longitudeDragState.pointerId) return;
+    const selectedLongitude = longitudeDragState.targetLongitude;
+    const wasDrag = longitudeDragState.moved;
+    longitudeDragState.active = false;
+    longitudeDragState.pointerId = null;
+    longitudeDragState.targetLongitude = null;
+    longitudeDragState.suppressClick = true;
+    if (longitudeGlobe.hasPointerCapture?.(event.pointerId)) {
+      longitudeGlobe.releasePointerCapture(event.pointerId);
+    }
+    if (allowSelection && !wasDrag && Number.isFinite(selectedLongitude)) {
+      handleLongitudeLineSelection(selectedLongitude);
+    }
+    window.setTimeout(() => {
+      longitudeDragState.suppressClick = false;
+    }, 0);
+  }
+
+  longitudeGlobe.addEventListener("pointerup", (event) => finishLongitudeDrag(event));
+  longitudeGlobe.addEventListener("pointercancel", (event) => finishLongitudeDrag(event, false));
+
+  longitudeActions.addEventListener("click", (event) => {
+    const actionButton = event.target.closest("[data-longitude-action]");
+    if (!actionButton) return;
+    const action = actionButton.dataset.longitudeAction;
+
+    if (action === "reveal-prime" && longitudeTaskState.phase === "zero-conflict") {
+      void revealPrimeMeridian();
+      return;
+    }
+    if (action === "continue-after-prime" && longitudeTaskState.phase === "prime-established") {
+      setLongitudeActions();
+      showLongitudeExplorationChoices();
+      return;
+    }
+    if (action === "explore-east" || action === "explore-west") {
+      if (longitudeTaskState.phase === "choose-direction") {
+        void exploreLongitudeDirection(action === "explore-east" ? "east" : "west");
+      }
+      return;
+    }
+    if (action === "establish-ew" && longitudeTaskState.phase === "both-sides-question") {
+      void establishLongitudeNotation();
+      return;
+    }
+    if (action === "start-longitude-calibration-1" && longitudeTaskState.ewEstablished) {
+      startLongitudeCalibrationOne();
+      return;
+    }
+    if (
+      action === "complete-longitude-calibration"
+      && longitudeTaskState.phase === "longitude-calibration-summary"
+    ) {
+      void completeLongitudeTask();
+      return;
+    }
+    if (longitudeTaskState.phase !== "longitude-calibration-2") return;
+    if (action === "answer-150-w") {
+      longitudeTaskState.calibration2Errors += 1;
+      setLongitudeCopy({
+        prompt: "这条经线的经度是多少？",
+        feedback: longitudeTaskState.calibration2Errors === 1
+          ? "高亮的经线在本初子午线以东，再判断应该用E还是W。"
+          : "本初子午线以东是东经，用E表示。",
+      });
+      return;
+    }
+    if (action === "answer-150-e") {
+      longitudeTaskState.phase = "longitude-calibration-2-complete";
+      longitudeTaskState.calibration2Complete = true;
+      const targetLabel = getLongitudeDegreeLabel("east", 150);
+      targetLabel?.classList.remove("is-target-hidden");
+      targetLabel?.classList.add("is-visible");
+      targetLabel?.setAttribute("aria-hidden", "false");
+      setLongitudeActions();
+      setLongitudeCopy({
+        prompt: "这条经线的经度是多少？",
+        feedback: "判断正确，这是150°E。",
+      });
+      window.setTimeout(() => showLongitudeCalibrationSummary(), 1750);
     }
   });
 

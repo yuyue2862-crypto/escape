@@ -289,6 +289,51 @@
           <p id="latitudeFeedback" class="latitude-stage__feedback" aria-live="polite"></p>
           <div id="latitudeActions" class="latitude-stage__actions"></div>
         </section>
+
+        <section id="longitudeIntroStage" class="longitude-intro" aria-hidden="true">
+          <p id="longitudeIntroLead" class="longitude-intro__lead"></p>
+          <p id="longitudeIntroQuestion" class="longitude-intro__question"></p>
+          <p id="longitudeIntroTitle" class="longitude-intro__title"></p>
+          <button id="longitudeIntroStart" class="longitude-intro__start" type="button">开始调查</button>
+        </section>
+
+        <section id="longitudeStage" class="longitude-stage" aria-hidden="true">
+          <p class="longitude-stage__kicker">任务三：修复东西定位</p>
+          <p id="longitudePrompt" class="longitude-stage__prompt" aria-live="polite"></p>
+          <p id="longitudeFeedback" class="longitude-stage__feedback" aria-live="polite"></p>
+
+          <div class="longitude-model-wrap">
+            <svg id="longitudeGlobe" class="longitude-globe" viewBox="0 0 620 620" aria-label="经度教学球">
+              <defs>
+                <radialGradient id="longitudeSphereFill" cx="38%" cy="31%" r="74%">
+                  <stop offset="0" stop-color="#655020" />
+                  <stop offset="0.58" stop-color="#35270e" />
+                  <stop offset="1" stop-color="#120c03" />
+                </radialGradient>
+                <clipPath id="longitudeSphereClip">
+                  <circle cx="310" cy="310" r="220" />
+                </clipPath>
+                <filter id="longitudeGlow" x="-70%" y="-70%" width="240%" height="240%">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <path id="longitudeSphereShell" class="longitude-globe__shell" />
+              <g id="longitudeEquator" class="longitude-globe__equator" clip-path="url(#longitudeSphereClip)"></g>
+              <g id="longitudeTeachingLines" class="longitude-globe__lines" clip-path="url(#longitudeSphereClip)"></g>
+              <g id="longitudeTeachingLabels" class="longitude-globe__labels"></g>
+              <g id="longitudeTeachingMarker" class="position-test-point longitude-teaching-marker" aria-hidden="true">
+                <circle class="position-test-point__halo" r="22" />
+                <circle class="position-test-point__ring" r="10" />
+                <circle class="position-test-point__core" r="4.5" />
+              </g>
+            </svg>
+            <div id="longitudeActions" class="longitude-stage__actions"></div>
+          </div>
+        </section>
       </section>
 
       <div id="intro" class="intro" aria-live="polite" aria-atomic="true">
