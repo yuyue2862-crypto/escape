@@ -218,6 +218,7 @@
     150,
   ];
   const longitudeDegreeValues = [30, 60, 90, 120, 150, 180];
+  const LONGITUDE_FRONT_DEPTH_TOLERANCE = 0.012;
   const longitudeTeachingModel = {
     radius: 1,
     rotation: { x: 0, y: 180, z: 0 },
@@ -1144,6 +1145,15 @@
     const paths = createProjectionPaths(type, primaryValue, "scan-line", projectionModel);
     paths.forEach((path) => scanDrawing.append(path));
 
+    const finishScanStroke = (path) => {
+      path.classList.remove("is-drawing");
+      path.classList.add("is-complete");
+    };
+    paths.forEach((path) => {
+      path.addEventListener("animationend", () => finishScanStroke(path), { once: true });
+      window.setTimeout(() => finishScanStroke(path), 2300);
+    });
+
     const endpoints = [];
     const poleLabels = [];
     if (type === "longitude") {
@@ -1704,6 +1714,7 @@
   function highlightDeviceUpdates(fields = []) {
     window.clearTimeout(deviceUpdateTimer);
     const rows = {
+      network: deviceNetworkRow,
       north: deviceNorthRow,
       east: deviceEastRow,
       system: deviceSystemRow,
@@ -1728,7 +1739,7 @@
 
   function reviewPositionDevice(isComplete) {
     updatePositionDevice(isComplete);
-    highlightDeviceUpdates(isComplete ? ["north", "east", "system"] : []);
+    highlightDeviceUpdates(isComplete ? ["north", "east", "system"] : ["network"]);
     device.classList.add("is-position-alert");
     positionDeviceReviewActive = true;
     setDeviceOpen(true);
@@ -1903,7 +1914,7 @@
     scene.classList.add("position-test-active");
     positionTestStage.setAttribute("aria-hidden", "false");
     positionTestState.phase = "knowledge-bridge";
-    setPositionTestCopy({ prompt: "纬线帮助定位南北向。" });
+    setPositionTestCopy({ prompt: "南北定位，要借助纬线。" });
     await waitForPositionAction([{ label: "继续", value: "continue-latitude-bridge" }]);
     setPositionTestCopy({ prompt: "可是，地球上有这么多条纬线，怎样区分它们呢？" });
     await waitForPositionAction([{ label: "答案", value: "reveal-latitude-answer" }]);
@@ -2661,12 +2672,12 @@
     };
 
     let previous = projectedPoints[0];
-    let previousIsFront = previous.depth <= 0;
+    let previousIsFront = previous.depth <= LONGITUDE_FRONT_DEPTH_TOLERANCE;
     if (previousIsFront) appendPoint("M", previous);
 
     for (let index = 1; index < projectedPoints.length; index += 1) {
       const current = projectedPoints[index];
-      const currentIsFront = current.depth <= 0;
+      const currentIsFront = current.depth <= LONGITUDE_FRONT_DEPTH_TOLERANCE;
 
       if (previousIsFront && currentIsFront) {
         appendPoint("L", current);
@@ -2685,6 +2696,11 @@
   }
 
   function createFrontLongitudePathData(longitude, endLatitude) {
+    const equatorPoint = projectOrthographicPoint(
+      getLongitudeTeachingPoint(longitude, 0),
+      longitudeTeachingModel,
+    );
+    if (equatorPoint.depth > LONGITUDE_FRONT_DEPTH_TOLERANCE) return "";
     return createFrontSurfacePathData(
       (latitude) => getLongitudeTeachingPoint(longitude, latitude),
       0,
@@ -2729,7 +2745,7 @@
         );
         equatorHit.setAttribute("cx", equatorPoint.x.toFixed(2));
         equatorHit.setAttribute("cy", equatorPoint.y.toFixed(2));
-        const isFront = equatorPoint.depth <= 0.035;
+        const isFront = equatorPoint.depth <= LONGITUDE_FRONT_DEPTH_TOLERANCE;
         const isEdge = Math.abs(equatorPoint.depth) < 0.22;
         group.classList.toggle("is-edge-hit", isEdge);
         equatorHit.setAttribute("r", isEdge ? "18" : "13");
@@ -3060,13 +3076,16 @@
     setLongitudeActions(actions);
   }
 
-  function animateLongitudeDirection(direction) {
+  function animateLongitudeDirection(
+    direction,
+    { showMarker = true, notation = "plain" } = {},
+  ) {
     const sign = direction === "east" ? 1 : -1;
     const duration = 7600;
     const primeRotation = getLongitudePrimeViewRotation();
     let startTime = null;
     let nextDegreeIndex = 0;
-    longitudeTeachingMarker.classList.add("is-moving");
+    if (showMarker) longitudeTeachingMarker.classList.add("is-moving");
 
     return new Promise((resolve) => {
       function renderFrame(timestamp) {
@@ -3076,13 +3095,13 @@
         const longitude = sign * 180 * easedProgress;
         longitudeTeachingModel.rotation.y = primeRotation + longitude;
         updateLongitudeTeachingGeometry();
-        setLongitudeMarker(longitude);
+        if (showMarker) setLongitudeMarker(longitude);
 
         while (
           nextDegreeIndex < longitudeDegreeValues.length
           && Math.abs(longitude) >= longitudeDegreeValues[nextDegreeIndex]
         ) {
-          showLongitudeLabel(direction, longitudeDegreeValues[nextDegreeIndex]);
+          showLongitudeLabel(direction, longitudeDegreeValues[nextDegreeIndex], notation);
           nextDegreeIndex += 1;
         }
 
@@ -3090,20 +3109,20 @@
           window.requestAnimationFrame(renderFrame);
           return;
         }
-        longitudeTeachingMarker.classList.remove("is-moving");
+        if (showMarker) longitudeTeachingMarker.classList.remove("is-moving");
         resolve();
       }
       window.requestAnimationFrame(renderFrame);
     });
   }
 
-  function animateLongitudeReturn(direction) {
+  function animateLongitudeReturn(direction, { showMarker = true } = {}) {
     const startLongitude = direction === "east" ? 180 : -180;
     const startRotation = longitudeTeachingModel.rotation.y;
     const primeRotation = getLongitudePrimeViewRotation();
     const duration = 1900;
     let startTime = null;
-    longitudeTeachingMarker.classList.add("is-moving");
+    if (showMarker) longitudeTeachingMarker.classList.add("is-moving");
 
     return new Promise((resolve) => {
       function renderFrame(timestamp) {
@@ -3114,12 +3133,12 @@
         longitudeTeachingModel.rotation.y = startRotation
           + (primeRotation - startRotation) * easedProgress;
         updateLongitudeTeachingGeometry();
-        setLongitudeMarker(longitude);
+        if (showMarker) setLongitudeMarker(longitude);
         if (rawProgress < 1) {
           window.requestAnimationFrame(renderFrame);
           return;
         }
-        longitudeTeachingMarker.classList.remove("is-moving");
+        if (showMarker) longitudeTeachingMarker.classList.remove("is-moving");
         resolve();
       }
       window.requestAnimationFrame(renderFrame);
@@ -3172,26 +3191,27 @@
     longitudeTaskState.phase = "establishing-ew";
     setLongitudeStageMode();
     setLongitudeActions();
+    longitudeTeachingModel.rotation.y = getLongitudePrimeViewRotation();
+    updateLongitudeTeachingGeometry();
+    hideLongitudeMarker();
     showCompleteLongitudeNotation("plain");
     const directionQuestion = "东西两边都有相同的度数，怎样区分它们在本初子午线的哪一边？";
     setLongitudeCopy({
       prompt: directionQuestion,
       feedback: "本初子午线以东，叫东经，用 E 表示。",
     });
-    for (const degree of [30, 60, 90, 120, 150]) {
-      showLongitudeLabel("east", degree, "ew");
-      await wait(430);
-    }
-    await wait(950);
+    await animateLongitudeDirection("east", { showMarker: false, notation: "ew" });
+    await wait(500);
+    await animateLongitudeReturn("east", { showMarker: false });
+    await wait(650);
     setLongitudeCopy({
       prompt: directionQuestion,
       feedback: "本初子午线以东，叫东经，用 E 表示。\n本初子午线以西，叫西经，用 W 表示。",
     });
-    for (const degree of [30, 60, 90, 120, 150]) {
-      showLongitudeLabel("west", degree, "ew");
-      await wait(430);
-    }
-    await wait(850);
+    await animateLongitudeDirection("west", { showMarker: false, notation: "ew" });
+    await wait(500);
+    await animateLongitudeReturn("west", { showMarker: false });
+    showCompleteLongitudeNotation("ew");
     longitudeTaskState.ewEstablished = true;
     longitudeTaskState.phase = "ew-established";
     updateCheckpoint("longitude-ew-complete");
