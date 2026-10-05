@@ -122,12 +122,15 @@
 
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
-  // TODO: 找到正式背景音乐后，把文件放入 assets/audio/
-  // 并将 bgmSrc 改为例如 "assets/audio/bgm.mp3"
+  // 音频文件放在 assets/audio/；背景音乐从经纬网出现时开始，独立于音效开关。
   const audioConfig = {
-    bgmSrc: "",
+    bgmSrc: "assets/audio/bgm.mp3",
     bgmVolume: 0.18,
     bgmLoop: true,
+    buttonClickSrc: "assets/audio/button-click.mp3",
+    buttonClickVolume: 0.3,
+    deviceOpenSrc: "assets/audio/device-open.mp3",
+    deviceOpenVolume: 0.35,
   };
 
   const sphereModel = {
@@ -157,6 +160,8 @@
   let taskPromptTimer = 0;
   let audioContext = null;
   let backgroundMusic = null;
+  let backgroundMusicRequested = false;
+  const soundEffects = new Map();
   let positionDeviceReviewActive = false;
   let positionDeviceCloseResolver = null;
   let relationshipRecordResult = null;
@@ -3543,6 +3548,21 @@
     return audioContext;
   }
 
+  function unlockRecordAudio() {
+    if (soundToggle.getAttribute("aria-pressed") === "true") return;
+    const context = getAudioContext();
+    if (!context) return;
+    if (context.state === "running") {
+      document.removeEventListener("pointerdown", unlockRecordAudio);
+      document.removeEventListener("keydown", unlockRecordAudio);
+    } else if (context.state === "suspended") {
+      context.resume().then(() => {
+        document.removeEventListener("pointerdown", unlockRecordAudio);
+        document.removeEventListener("keydown", unlockRecordAudio);
+      }).catch(() => {});
+    }
+  }
+
   function getBackgroundMusic() {
     if (!audioConfig.bgmSrc) return null;
     if (backgroundMusic) return backgroundMusic;
@@ -3556,13 +3576,46 @@
 
   function resumeBackgroundMusic() {
     const music = getBackgroundMusic();
-    if (!music) return;
-    music.play().catch(() => {});
+    if (!music || !music.paused) return;
+    music.play().then(() => {
+      document.removeEventListener("pointerdown", retryBackgroundMusic);
+      document.removeEventListener("keydown", retryBackgroundMusic);
+    }).catch(() => {});
   }
 
-  function pauseBackgroundMusic() {
-    if (!backgroundMusic) return;
-    backgroundMusic.pause();
+  function retryBackgroundMusic() {
+    if (backgroundMusicRequested) resumeBackgroundMusic();
+  }
+
+  function startBackgroundMusic() {
+    if (backgroundMusicRequested) return;
+    backgroundMusicRequested = true;
+    document.addEventListener("pointerdown", retryBackgroundMusic);
+    document.addEventListener("keydown", retryBackgroundMusic);
+    resumeBackgroundMusic();
+  }
+
+  function playSoundEffect(kind) {
+    if (soundToggle.getAttribute("aria-pressed") === "true") return;
+    const src = kind === "button" ? audioConfig.buttonClickSrc : audioConfig.deviceOpenSrc;
+    if (!src) return;
+
+    let sound = soundEffects.get(kind);
+    if (!sound) {
+      sound = new Audio(src);
+      sound.volume = kind === "button" ? audioConfig.buttonClickVolume : audioConfig.deviceOpenVolume;
+      sound.preload = "auto";
+      soundEffects.set(kind, sound);
+    }
+    sound.currentTime = 0;
+    sound.play().catch(() => {});
+  }
+
+  function stopSoundEffects() {
+    soundEffects.forEach((sound) => {
+      sound.pause();
+      sound.currentTime = 0;
+    });
   }
 
   function playRecordTick(characterIndex) {
@@ -3939,6 +3992,7 @@
     scene.setAttribute("aria-hidden", "false");
     scene.classList.add("is-recovering");
     intro.classList.add("is-gone");
+    startBackgroundMusic();
 
     await wait(3000);
     soundToggle.classList.add("is-visible");
@@ -3962,11 +4016,13 @@
 
   function setDeviceOpen(isOpen) {
     window.clearTimeout(deviceTimer);
+    const wasOpen = device.classList.contains("is-open");
     device.classList.toggle("is-open", isOpen);
     deviceDock.setAttribute("aria-expanded", String(isOpen));
     deviceDock.setAttribute("aria-label", isOpen ? "返航定位器已打开" : "打开返航定位器");
 
     if (isOpen) {
+      if (!wasOpen) playSoundEffect("deviceOpen");
       if (!positionDeviceReviewActive && !completionDeviceReviewType) {
         deviceTimer = window.setTimeout(() => setDeviceOpen(false), 6800);
       }
@@ -4110,6 +4166,7 @@
     scene.className = "scene is-recovering tracks-awake";
     scene.setAttribute("aria-hidden", "false");
     intro.classList.add("is-gone");
+    startBackgroundMusic();
     introMessage.classList.remove("is-visible");
     soundToggle.classList.add("is-visible");
     narration.classList.remove("is-visible");
@@ -4944,17 +5001,23 @@
   soundToggle.addEventListener("click", () => {
     const isMuted = soundToggle.getAttribute("aria-pressed") === "true";
     soundToggle.setAttribute("aria-pressed", String(!isMuted));
-    soundToggle.setAttribute("aria-label", isMuted ? "声音已开启" : "声音已关闭");
+    soundToggle.setAttribute("aria-label", isMuted ? "音效已开启" : "音效已关闭");
     if (isMuted) {
       const context = getAudioContext();
       if (context?.state === "suspended") {
         context.resume().catch(() => {});
       }
-      resumeBackgroundMusic();
       return;
     }
-    pauseBackgroundMusic();
+    stopSoundEffects();
   });
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (button && button !== deviceDock) playSoundEffect("button");
+  });
+  document.addEventListener("pointerdown", unlockRecordAudio);
+  document.addEventListener("keydown", unlockRecordAudio);
 
   progressToggle.addEventListener("click", () => {
     setProgressToggleMode("menu");
