@@ -2017,6 +2017,19 @@
     latitudeFeedback.textContent = feedback;
   }
 
+  function setLatitudeNotationFeedback(count) {
+    const explanations = [
+      ["north", "赤道以北，叫北纬，用 N 表示。"],
+      ["south", "赤道以南，叫南纬，用 S 表示。"],
+    ];
+    latitudeFeedback.replaceChildren(...explanations.slice(0, count).map(([side, message]) => {
+      const line = document.createElement("span");
+      line.className = `latitude-notation__${side}`;
+      line.textContent = message;
+      return line;
+    }));
+  }
+
   async function typeLatitudeQuestion(question) {
     const sequence = ++latitudeQuestionSequence;
     latitudePrompt.textContent = "";
@@ -2045,6 +2058,7 @@
       "is-calibration-one",
       "is-calibration-two",
       "is-summary-layout",
+      "is-notation-layout",
     );
     if (mode === "exploration") {
       latitudeStage.classList.add("is-exploration-layout");
@@ -2058,6 +2072,7 @@
     if (mode === "summary") {
       latitudeStage.classList.add("is-summary-layout");
     }
+    if (mode === "notation") latitudeStage.classList.add("is-notation-layout");
   }
 
   function setLatitudeActions(actions = [], { immediate = false } = {}) {
@@ -2330,13 +2345,13 @@
 
   async function establishLatitudeNotation() {
     latitudeTaskState.phase = "establishing-ns";
-    setLatitudeStageMode();
+    setLatitudeStageMode("notation");
     setLatitudeActions();
     const directionQuestion = "两边都有相同的度数，如何分辨它们在赤道的哪一边？";
     setLatitudeCopy({
       prompt: directionQuestion,
-      feedback: "赤道以北，叫北纬，用 N 表示。",
     });
+    setLatitudeNotationFeedback(1);
     for (const degree of [20, 40, 60, 80, 90]) {
       showLatitudeDegree(degree, "ns");
       await wait(230);
@@ -2344,8 +2359,8 @@
     await wait(850);
     setLatitudeCopy({
       prompt: directionQuestion,
-      feedback: "赤道以北，叫北纬，用 N 表示。\n赤道以南，叫南纬，用 S 表示。",
     });
+    setLatitudeNotationFeedback(2);
     for (const degree of [20, 40, 60, 80, 90]) {
       showLatitudeDegree(-degree, "ns");
       await wait(230);
@@ -2359,6 +2374,7 @@
 
   function showLatitudeConclusion(immediateProcessAction = false) {
     latitudeTaskState.phase = "ns-conclusion";
+    setLatitudeStageMode();
     setLatitudeCopy({
       prompt: "纬度从赤道的0°开始，向南、向北逐渐增大，到两极达到90°。",
     });
@@ -2502,6 +2518,7 @@
   function restoreLatitudeNotationComplete() {
     loadLatitudeTaskState();
     activateLatitudeTeachingStage();
+    setLatitudeStageMode("notation");
     getLatitudeLineGroup(0)?.classList.add("is-equator");
     showLatitudeDegree(0);
     showLatitudeDirection("north", "ns");
@@ -2509,8 +2526,8 @@
     latitudeTaskState.phase = "ns-established";
     setLatitudeCopy({
       prompt: "两边都有相同的度数，如何分辨它们在赤道的哪一边？",
-      feedback: "赤道以北，叫北纬，用 N 表示。\n赤道以南，叫南纬，用 S 表示。",
     });
+    setLatitudeNotationFeedback(2);
     setLatitudeActions(
       [{ label: "结论", action: "show-latitude-conclusion" }],
       { immediate: true },

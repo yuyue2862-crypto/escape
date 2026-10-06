@@ -2771,6 +2771,36 @@ button:focus-visible {
   --active-teaching-globe-radius: var(--teaching-globe-calibration-visual-radius);
 }
 
+.latitude-stage.is-notation-layout .latitude-stage__feedback {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  pointer-events: none;
+}
+
+.latitude-stage.is-notation-layout .latitude-stage__feedback span {
+  --latitude-notation-clearance: calc(clamp(2rem, 8vw, 5.5em) - 2em);
+  position: absolute;
+  left: calc(50% + var(--active-teaching-globe-radius) + var(--teaching-side-gap) + var(--latitude-notation-clearance));
+  width: var(--teaching-side-width);
+  max-width: calc(50vw - var(--active-teaching-globe-radius) - var(--teaching-side-gap) - var(--latitude-notation-clearance) - 1rem);
+  text-align: left;
+  transform: translateY(-50%);
+}
+
+.latitude-stage.is-notation-layout .latitude-notation__north {
+  top: calc(var(--teaching-globe-center-y) - var(--active-teaching-globe-radius) / 2);
+}
+
+.latitude-stage.is-notation-layout .latitude-notation__south {
+  top: calc(var(--teaching-globe-center-y) + var(--active-teaching-globe-radius) / 2);
+}
+
+.latitude-stage.is-notation-layout .latitude-stage__actions.is-process-actions {
+  transform: translateX(clamp(0.5rem, 2vw, 2.25rem));
+}
+
 .longitude-stage.is-notation-layout .longitude-stage__feedback {
   inset: 0;
   width: 100%;
@@ -2950,6 +2980,13 @@ button:focus-visible {
   .longitude-stage.is-notation-layout .longitude-notation__west {
     right: auto;
     left: 0.75rem;
+  }
+
+  .latitude-stage.is-notation-layout .latitude-stage__feedback span {
+    right: 0.75rem;
+    left: auto;
+    width: max(5rem, calc(50vw - var(--active-teaching-globe-radius) - 1.5rem));
+    max-width: none;
   }
 
   .comparison-stage {
