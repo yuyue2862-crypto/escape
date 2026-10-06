@@ -103,7 +103,7 @@
         <div class="vignette" aria-hidden="true"></div>
         <div class="recovery-shade" aria-hidden="true"></div>
 
-        <button id="soundToggle" class="sound-toggle" type="button" aria-label="声音已关闭" aria-pressed="true">
+        <button id="soundToggle" class="sound-toggle" type="button" aria-label="音效已开启" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4.5 9.4h3.2l4-3.2v11.6l-4-3.2H4.5z" />
             <path class="sound-wave" d="M15 9.2c.8.8 1.2 1.7 1.2 2.8s-.4 2-1.2 2.8" />
@@ -316,6 +316,13 @@
                   <circle cx="310" cy="310" r="220" />
                 </clipPath>
                 <filter id="longitudeGlow" x="-70%" y="-70%" width="240%" height="240%">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <filter id="longitudeCandidateGlow" filterUnits="userSpaceOnUse" x="0" y="0" width="620" height="620">
                   <feGaussianBlur stdDeviation="4" result="blur" />
                   <feMerge>
                     <feMergeNode in="blur" />
