@@ -7,6 +7,7 @@
     <title>未知信号</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23050b0e'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23b6ded9'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%237aa6a2' stroke-opacity='.5'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="task4/task4.css" />
   </head>
   <body>
     <main class="experience" aria-label="未知空间">
@@ -342,6 +343,11 @@
             <div id="longitudeActions" class="longitude-stage__actions"></div>
           </div>
         </section>
+
+        <!-- Task four architecture mount. It remains intentionally inactive in Step 1. -->
+        <section id="task4Stage" class="task4-stage" aria-hidden="true" hidden>
+          <div id="task4GlobeMount" class="task4-globe-mount"></div>
+        </section>
       </section>
 
       <div id="intro" class="intro" aria-live="polite" aria-atomic="true">
@@ -383,6 +389,9 @@
       </div>
     </main>
 
+    <script src="task4/natural-earth-land-data.js"></script>
+    <script src="task4/real-earth-globe.js"></script>
+    <script src="task4/task4-flow.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

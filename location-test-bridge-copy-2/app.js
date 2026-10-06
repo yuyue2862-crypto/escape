@@ -90,9 +90,38 @@
   const longitudeTeachingLines = document.querySelector("#longitudeTeachingLines");
   const longitudeTeachingLabels = document.querySelector("#longitudeTeachingLabels");
   const longitudeTeachingMarker = document.querySelector("#longitudeTeachingMarker");
+  // Task four stays dormant in Step 1. Its lifecycle is intentionally isolated
+  // from the existing task-one-to-three teaching stages.
+  const task4Stage = document.querySelector("#task4Stage");
+  const task4GlobeMount = document.querySelector("#task4GlobeMount");
 
   const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   const PROCESS_ACTION_DELAY = 2000;
+  let task4Flow = null;
+
+  function initializeTask4Architecture() {
+    if (task4Flow) return task4Flow;
+    if (!window.Task4Flow) return null;
+    task4Flow = window.Task4Flow.create({
+      stage: task4Stage,
+      globeMount: task4GlobeMount,
+      // Task-four checkpoint persistence is deliberately deferred.
+      onCheckpoint: () => {},
+    });
+    task4Flow.initialize();
+    return task4Flow;
+  }
+
+  // Reserved hand-off for the future task-three completion route. It is not
+  // called in Step 1, so all existing tasks retain their current behavior.
+  function startTask4WhenImplemented() {
+    return initializeTask4Architecture()?.start() || null;
+  }
+
+  function destroyTask4WhenImplemented() {
+    task4Flow?.destroy();
+    task4Flow = null;
+  }
   const DEVICE_UPDATE_HIGHLIGHT_DURATION = 2600;
   const processActionRevealTokens = new WeakMap();
 
