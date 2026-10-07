@@ -4,10 +4,12 @@
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
   const DEFAULT_VIEW = Object.freeze({ latitude: 0, longitude: 0, rotation: 0 });
   const VALID_MODES = new Set(["idle", "view", "rotate", "select", "interactive"]);
-  const MIN_SCALE = 0.8;
-  const MAX_SCALE = 1.5;
-  const LATITUDE_LABEL_VALUES = Object.freeze([-60, -40, -20, 0, 20, 40, 60]);
-  const LONGITUDE_LABEL_VALUES = Object.freeze([-120, -90, -60, -30, 30, 60, 90, 120]);
+  const MIN_SCALE = 0.6;
+  const MAX_SCALE = 2;
+  const LATITUDE_LABEL_VALUES = Object.freeze([-90, -80, -60, -40, -20, 0, 20, 40, 60, 80, 90]);
+  const LATITUDE_LABEL_MERIDIANS = Object.freeze([0, 180]);
+  // -180 and 180 are the same meridian, so it is intentionally represented once.
+  const LONGITUDE_LABEL_VALUES = Object.freeze([-180, -150, -120, -90, -60, -30, 30, 60, 90, 120, 150]);
   const LABEL_MINIMUM_DEPTH = 0.08;
   const DEFAULT_CONFIG = Object.freeze({
     size: "min(76vh, 52rem, 92vw)",
@@ -385,16 +387,18 @@
     function formatCoordinateLabel(kind, value) {
       if (value === 0) return "0°";
       if (kind === "latitude") return `${Math.abs(value)}°${value > 0 ? "N" : "S"}`;
+      if (Math.abs(value) === 180) return "180°";
       return `${Math.abs(value)}°${value > 0 ? "E" : "W"}`;
     }
 
-    function buildCoordinateLabel(kind, value) {
+    function buildCoordinateLabel(kind, value, referenceMeridian = 0) {
       const coordinate = kind === "latitude"
-        ? { latitude: value, longitude: 0 }
+        ? { latitude: value, longitude: referenceMeridian }
         : { latitude: 0, longitude: value };
       const node = element("text", {
         class: `task4-real-earth__coordinate-label task4-real-earth__coordinate-label--${kind}`,
         "data-value": value,
+        "data-reference-meridian": kind === "latitude" ? referenceMeridian : "",
         "text-anchor": "middle",
         "dominant-baseline": "middle",
         dy: kind === "latitude" ? "-0.65em" : "1.25em",
@@ -403,13 +407,17 @@
       });
       node.textContent = formatCoordinateLabel(kind, value);
       coordinateLabelLayer.append(node);
-      coordinateLabels.push({ node, world: toCartesian(coordinate) });
+      coordinateLabels.push({
+        node,
+        world: toCartesian(coordinate),
+        showOnLimb: kind === "latitude" && Math.abs(value) === 90,
+      });
     }
 
     function renderCoordinateLabels() {
-      coordinateLabels.forEach(({ node, world }) => {
+      coordinateLabels.forEach(({ node, world, showOnLimb }) => {
         const point = projectWorld(world);
-        const visible = point.depth > LABEL_MINIMUM_DEPTH;
+        const visible = showOnLimb ? point.depth >= -1e-12 : point.depth > LABEL_MINIMUM_DEPTH;
         node.setAttribute("visibility", visible ? "visible" : "hidden");
         node.setAttribute("aria-hidden", String(!visible));
         node.setAttribute("transform", `translate(${point.x} ${point.y})`);
@@ -509,6 +517,7 @@
       if (!drag) return;
       const pointerId = drag.pointerId;
       drag = null;
+      svg.classList.remove("is-pointer-down");
       svg.classList.remove("is-dragging");
       if (svg.hasPointerCapture?.(pointerId)) svg.releasePointerCapture(pointerId);
     }
@@ -524,6 +533,7 @@
         startView: { ...view },
         moved: false,
       };
+      svg.classList.add("is-pointer-down");
       svg.setPointerCapture(event.pointerId);
       event.preventDefault();
     }
@@ -594,7 +604,13 @@
           class: "task4-real-earth__coordinate-labels",
           "aria-hidden": "true",
         });
-        LATITUDE_LABEL_VALUES.forEach((latitude) => buildCoordinateLabel("latitude", latitude));
+        LATITUDE_LABEL_MERIDIANS.forEach((referenceMeridian) => {
+          LATITUDE_LABEL_VALUES.forEach((latitude) => {
+            // Both meridians meet at each pole, so polar labels are shared.
+            if (Math.abs(latitude) === 90 && referenceMeridian !== 0) return;
+            buildCoordinateLabel("latitude", latitude, referenceMeridian);
+          });
+        });
         LONGITUDE_LABEL_VALUES.forEach((longitude) => buildCoordinateLabel("longitude", longitude));
         markerLayer = element("g", { class: "task4-real-earth__markers", "clip-path": `url(#${prefix}-clip)` });
         markers.forEach(updateMarkerNode);

@@ -1,4 +1,4 @@
-/* All selectors belong to task four; the main game's entry remains dormant. */
+/* All selectors belong to task four. */
 .task4-stage {
   position: absolute;
   z-index: 26;
@@ -10,17 +10,298 @@
   display: none;
 }
 
+.task4-story {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.5rem, 5vw, 5rem);
+  background: rgba(1, 8, 12, 0.8);
+}
+
+.task4-story[hidden] {
+  display: none;
+}
+
+.task4-story__panel {
+  width: min(48rem, 92vw);
+  text-align: center;
+  color: #dce9e8;
+  text-shadow: 0 2px 12px #02090d;
+}
+
+.task4-story__device {
+  overflow: hidden;
+  border: 1px solid rgba(118, 200, 217, 0.5);
+  border-radius: clamp(18px, 2vw, 28px);
+  background: linear-gradient(160deg, rgba(8, 34, 42, 0.97), rgba(2, 14, 20, 0.98));
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.5), inset 0 0 36px rgba(77, 183, 207, 0.06);
+}
+
+.task4-story__device-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border-bottom: 1px solid rgba(118, 200, 217, 0.22);
+  padding: 0.9rem clamp(1.2rem, 3vw, 2.2rem);
+  text-align: left;
+  background: rgba(9, 43, 52, 0.7);
+}
+
+.task4-story__device-header h2 {
+  margin: 0;
+  color: #d9edef;
+  font-size: clamp(20px, 1.55vw, 28px);
+  letter-spacing: 0.08em;
+}
+
+.task4-story__signal {
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 50%;
+  background: #7fd8e9;
+  box-shadow: 0 0 14px rgba(92, 214, 235, 0.72);
+}
+
+.task4-story__screen {
+  min-height: min(60vh, 34rem);
+  padding: clamp(1.4rem, 3vh, 2rem) clamp(1.4rem, 4vw, 3rem);
+  text-align: left;
+}
+
+.task4-story__status {
+  margin: 0 0 0.75em;
+  color: #f0df9a;
+  font-size: clamp(24px, 2vw, 36px);
+  font-weight: 700;
+}
+
+.task4-story__log {
+  display: grid;
+  gap: 0.16em;
+  font-size: clamp(17px, 1.35vw, 24px);
+  line-height: 1.5;
+}
+
+.task4-story__log-line {
+  margin: 0;
+  opacity: 0;
+  transform: translateY(0.25em);
+}
+
+.task4-story__log-line.is-visible {
+  animation: task4-story-line-in 320ms ease-out forwards;
+}
+
+.task4-story__log-line[data-tone="target"],
+.task4-story__log-line[data-tone="heading"] {
+  color: #91d7ec;
+  font-weight: 700;
+}
+
+.task4-story__log-line[data-tone="working"] {
+  color: #f0df9a;
+}
+
+.task4-story__log-line[data-tone="ready"] {
+  color: #9edfb6;
+}
+
+.task4-story__log-line[data-tone="error"] {
+  color: #f0a06e;
+  font-weight: 700;
+}
+
+.task4-story__problem {
+  margin-top: clamp(1rem, 2.5vh, 1.6rem);
+  border-top: 1px solid rgba(134, 211, 226, 0.2);
+  padding-top: clamp(1rem, 2vh, 1.4rem);
+}
+
+.task4-story__question {
+  margin: 0;
+  color: #f3e8c6;
+  font-size: clamp(21px, 1.75vw, 31px);
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.task4-story__detection {
+  margin-top: 0.85em;
+  color: #f0df9a;
+  font-size: clamp(18px, 1.4vw, 25px);
+  line-height: 1.5;
+}
+
+.task4-story__detection p {
+  margin: 0;
+}
+
+.task4-story__teaching {
+  margin-top: 0.35rem;
+}
+
+.task4-story__lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.7rem, 2vw, 1.2rem);
+}
+
+.task4-story__lesson-card {
+  border: 1px solid rgba(133, 210, 226, 0.24);
+  border-radius: 14px;
+  padding: clamp(0.65rem, 1.5vw, 1rem);
+  text-align: center;
+  background: rgba(7, 35, 43, 0.68);
+  animation: task4-story-line-in 380ms ease-out both;
+}
+
+.task4-story__lesson-card h3 {
+  margin: 0;
+  color: #91d7ec;
+  font-size: clamp(18px, 1.35vw, 24px);
+}
+
+.task4-story__lesson-card p {
+  margin: 0;
+  color: #dce9e8;
+  font-size: clamp(15px, 1.08vw, 19px);
+  line-height: 1.45;
+}
+
+.task4-story__lesson-card .task4-story__lesson-limitation {
+  color: #f0c17b;
+}
+
+.task4-story__lesson-diagram {
+  display: block;
+  width: 100%;
+  height: clamp(7.2rem, 18vh, 9.2rem);
+  margin: 0.2rem auto;
+}
+
+.task4-story__lesson-sphere {
+  fill: rgba(25, 79, 93, 0.32);
+  stroke: rgba(153, 218, 231, 0.56);
+  stroke-width: 2;
+}
+
+.task4-story__lesson-line {
+  fill: none;
+  stroke: #82d8e9;
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 5px rgba(93, 211, 233, 0.5));
+}
+
+.task4-story__lesson-card--longitude .task4-story__lesson-line,
+.task4-story__lesson-line--longitude {
+  stroke: #f0d274;
+  filter: drop-shadow(0 0 5px rgba(238, 198, 83, 0.5));
+}
+
+.task4-story__lesson-option {
+  fill: #f5f0c8;
+  stroke: rgba(3, 18, 24, 0.86);
+  stroke-width: 1.5;
+}
+
+.task4-story__intersection-lesson {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.8fr) minmax(16rem, 1.2fr);
+  align-items: center;
+  gap: clamp(0.9rem, 2.5vw, 1.8rem);
+  animation: task4-story-line-in 420ms ease-out both;
+}
+
+.task4-story__intersection-diagram {
+  display: block;
+  width: 100%;
+  max-height: min(26vh, 13rem);
+}
+
+.task4-story__intersection-halo {
+  fill: rgba(255, 190, 74, 0.24);
+  filter: drop-shadow(0 0 8px rgba(255, 190, 74, 0.72));
+}
+
+.task4-story__intersection-point {
+  fill: #fff0a6;
+  stroke: #d88b2e;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px rgba(255, 194, 79, 0.9));
+}
+
+.task4-story__intersection-equation {
+  margin: 0;
+  color: #f0df9a;
+  font-size: clamp(20px, 1.55vw, 28px);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.task4-story__intersection-conclusion {
+  grid-column: 2;
+  margin: 0.75em 0 0;
+  color: #f3e8c6;
+  font-size: clamp(17px, 1.28vw, 23px);
+  line-height: 1.55;
+}
+
+.task4-story__detection--ready p:nth-child(2) {
+  color: #f0c17b;
+  font-weight: 700;
+}
+
+.task4-story__action {
+  margin-top: clamp(1.5rem, 4vh, 3rem);
+  min-width: 12rem;
+  border: 1px solid rgba(132, 211, 228, 0.58);
+  border-radius: 999px;
+  padding: 0.65em 1.7em;
+  color: #e4f4f4;
+  background: rgba(7, 35, 42, 0.9);
+  box-shadow: 0 0 18px rgba(67, 176, 201, 0.16);
+  font: inherit;
+  font-size: clamp(18px, 1.35vw, 24px);
+  cursor: pointer;
+}
+
+.task4-story__action:hover,
+.task4-story__action:focus-visible {
+  border-color: rgba(167, 231, 242, 0.9);
+  background: rgba(13, 56, 66, 0.96);
+  outline: none;
+}
+
+@keyframes task4-story-line-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 720px) {
+  .task4-story__lesson-grid,
+  .task4-story__intersection-lesson {
+    grid-template-columns: 1fr;
+  }
+
+  .task4-story__intersection-conclusion {
+    grid-column: 1;
+  }
+}
+
 .task4-stage__status {
   position: absolute;
   z-index: 2;
   top: clamp(1.5rem, 5vh, 3.5rem);
   left: clamp(1.5rem, 5vw, 6rem);
-  width: min(28vw, 24rem);
+  width: min(38vw, 34rem);
   text-align: left;
   pointer-events: none;
 }
 
 .task4-stage__title,
+.task4-stage__instruction,
 .task4-stage__target,
 .task4-stage__feedback {
   margin: 0;
@@ -34,27 +315,42 @@
   font-weight: 700;
 }
 
+.task4-stage__instruction {
+  margin-top: 0.35em;
+  color: #cdd9d7;
+  font-size: clamp(18px, 1.3vw, 24px);
+}
+
 .task4-stage__target {
-  color: #e9e4ce;
-  font-size: clamp(20px, 1.55vw, 28px);
+  margin-top: 0.7em;
+  color: #91d7ec;
+  font-size: clamp(18px, 1.35vw, 24px);
 }
 
 .task4-stage__target p {
   margin: 0;
 }
 
-.task4-stage__target p:nth-child(2) {
-  font-size: 1.08em;
+.task4-stage__target p:first-child {
   font-weight: 700;
 }
 
-.task4-stage__target p:nth-child(3) {
+.task4-stage__target p + p {
   margin-top: 0.25em;
 }
 
+.task4-stage__target.is-typing::after {
+  content: "▍";
+  display: inline-block;
+  margin-left: 0.16em;
+  color: #b8edf8;
+  animation: task4-target-caret 0.65s steps(1, end) infinite;
+}
+
 .task4-stage__feedback {
-  color: #a7e2ee;
-  font-size: clamp(20px, 1.55vw, 28px);
+  margin: 1.75em 0 0;
+  color: #f2d36f;
+  font-size: clamp(18px, 1.4vw, 24px);
 }
 
 .task4-stage__feedback:empty {
@@ -63,6 +359,23 @@
 
 .task4-stage__feedback span {
   display: block;
+}
+
+.task4-stage__feedback.is-success {
+  color: #ffad5c;
+  font-weight: 700;
+  animation: task4-feedback-success 1s ease-out both;
+}
+
+@keyframes task4-target-caret {
+  50% { opacity: 0; }
+}
+
+@keyframes task4-feedback-success {
+  0% { opacity: 0.3; transform: scale(0.94); }
+  22% { opacity: 1; transform: scale(1.05); }
+  44% { opacity: 0.64; transform: scale(1.01); }
+  70%, 100% { opacity: 1; transform: scale(1); }
 }
 
 .task4-globe-mount {
@@ -80,19 +393,19 @@
   width: 100%;
   height: 100%;
   overflow: visible;
+  cursor: default;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .task4-real-earth[data-mode="rotate"],
-.task4-real-earth[data-mode="interactive"] {
-  cursor: grab;
+.task4-real-earth[data-mode="interactive"],
+.task4-real-earth[data-mode="select"] {
   touch-action: none;
 }
 
-.task4-real-earth[data-mode="select"] {
-  cursor: crosshair;
-  touch-action: none;
+.task4-real-earth.is-pointer-down {
+  cursor: grab;
 }
 
 .task4-real-earth.is-dragging {
@@ -138,6 +451,10 @@
   stroke-width: 3;
   stroke-linejoin: round;
   pointer-events: none;
+}
+
+.task4-real-earth__coordinate-label--longitude {
+  fill: #f2dda0;
 }
 
 .task4-real-earth__selection {
@@ -206,4 +523,263 @@
   font-variant-numeric: tabular-nums;
   white-space: pre-line;
   pointer-events: none;
+}
+
+/* Task-four story uses the same world-stage rhythm as tasks one through three:
+   a small device window, a central observation object, and a secondary action. */
+.task4-story {
+  display: block;
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.task4-stage.is-story-mode {
+  pointer-events: none;
+}
+
+.task4-story__field {
+  position: absolute;
+  z-index: 1;
+  top: var(--teaching-prompt-top, clamp(4.65rem, 8.5vh, 6.25rem));
+  left: 50%;
+  width: min(64rem, 78vw);
+  transform: translateX(-50%);
+  text-align: center;
+  text-shadow: 0 3px 24px rgba(0, 0, 0, 0.94);
+  pointer-events: none;
+}
+
+.task4-story__panel {
+  position: absolute;
+  z-index: 2;
+  right: clamp(1.25rem, 3.2vw, 3rem);
+  bottom: clamp(1.5rem, 6vh, 3.8rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: min(24rem, 30vw);
+  color: #dce9e8;
+  text-align: left;
+  text-shadow: 0 2px 12px #02090d;
+  pointer-events: auto;
+}
+
+.task4-story__device {
+  width: 100%;
+  overflow: hidden;
+  border-color: rgba(55, 198, 244, 0.45);
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgba(8, 40, 61, 0.97), rgba(6, 26, 43, 0.985) 72%),
+    #061a2b;
+  box-shadow:
+    0 18px 70px rgba(0, 0, 0, 0.58),
+    inset 0 0 28px rgba(55, 198, 244, 0.055),
+    inset 0 1px rgba(199, 244, 255, 0.08);
+}
+
+.task4-story__device-header {
+  gap: 0.65rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom-color: rgba(55, 198, 244, 0.2);
+  background: rgba(7, 32, 49, 0.72);
+}
+
+.task4-story__device-header h2 {
+  color: #c7f4ff;
+  font-size: var(--font-device, clamp(18px, 1.25vw, 24px));
+  font-weight: 600;
+  letter-spacing: 0.13em;
+}
+
+.task4-story__signal {
+  width: 6px;
+  height: 6px;
+  background: #7fd8e9;
+  box-shadow: 0 0 9px rgba(92, 214, 235, 0.56);
+}
+
+.task4-story__screen {
+  min-height: 0;
+  padding: 1rem 1.15rem 1.1rem;
+  text-align: left;
+}
+
+.task4-story__status {
+  margin: 0 0 0.55em;
+  color: #f0df9a;
+  font-size: clamp(18px, 1.35vw, 24px);
+  font-weight: 700;
+  text-align: center;
+}
+
+.task4-story__log {
+  justify-items: center;
+  gap: 0.1em;
+  font-size: clamp(14px, 1.05vw, 18px);
+  line-height: 1.56;
+}
+
+.task4-story__problem {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.task4-story__question {
+  margin: 0;
+  color: rgba(241, 236, 216, 0.96);
+  font-size: var(--font-classroom, clamp(24px, 1.46vw, 28px));
+  font-weight: 500;
+  line-height: 1.62;
+  letter-spacing: 0.055em;
+}
+
+.task4-story__problem-note {
+  margin: 0.5em 0 0;
+  color: rgba(255, 226, 143, 0.9);
+  font-size: clamp(17px, 1.12vw, 21px);
+  line-height: 1.5;
+}
+
+.task4-story__teaching {
+  width: min(38rem, 62vw);
+  margin: clamp(0.8rem, 2vh, 1.4rem) auto 0;
+}
+
+.task4-story__investigation {
+  animation: task4-story-line-in 420ms ease-out both;
+}
+
+.task4-story__investigation h3 {
+  margin: 0;
+  color: rgba(215, 185, 103, 0.76);
+  font-size: var(--font-record-label, clamp(17px, 1.15vw, 22px));
+  font-weight: 500;
+  letter-spacing: 0.2em;
+}
+
+.task4-story__investigation-prompt {
+  margin: 0.55rem 0 0;
+  color: rgba(255, 242, 195, 0.98);
+  font-size: clamp(22px, 1.46vw, 28px);
+  font-weight: 600;
+  line-height: 1.52;
+}
+
+.task4-story__investigation-diagram {
+  display: block;
+  width: min(28rem, 40vw);
+  max-height: min(35vh, 18rem);
+  margin: 0.15rem auto 0;
+  overflow: visible;
+}
+
+.task4-story__lesson-sphere {
+  fill: rgba(16, 57, 71, 0.22);
+  stroke: rgba(153, 218, 231, 0.48);
+}
+
+.task4-story__lesson-line {
+  stroke-width: 3.4;
+}
+
+.task4-story__lesson-line--latitude {
+  stroke: #82d8e9;
+  filter: drop-shadow(0 0 5px rgba(93, 211, 233, 0.5));
+}
+
+.task4-story__lesson-line--longitude {
+  stroke: #f0d274;
+  filter: drop-shadow(0 0 5px rgba(238, 198, 83, 0.5));
+}
+
+.task4-story__candidate-point {
+  fill: #f5f0c8;
+  stroke: rgba(3, 18, 24, 0.9);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px rgba(245, 240, 200, 0.55));
+}
+
+.task4-story__observation,
+.task4-story__finding {
+  margin: 0.2rem 0 0;
+  font-size: clamp(18px, 1.2vw, 23px);
+  line-height: 1.55;
+}
+
+.task4-story__observation {
+  color: rgba(224, 214, 178, 0.9);
+}
+
+.task4-story__finding {
+  color: #f0df9a;
+  font-weight: 600;
+}
+
+.task4-story__intersection-halo {
+  fill: rgba(255, 190, 74, 0.24);
+  filter: drop-shadow(0 0 8px rgba(255, 190, 74, 0.72));
+}
+
+.task4-story__intersection-point {
+  fill: #fff0a6;
+  stroke: #d88b2e;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px rgba(255, 194, 79, 0.9));
+}
+
+.task4-story__action {
+  position: absolute;
+  z-index: 2;
+  right: clamp(6.5rem, 9vw, 10rem);
+  bottom: clamp(1.5rem, 6vh, 3.8rem);
+  min-width: var(--process-button-min-width, 7.5rem);
+  min-height: var(--process-button-min-height, 2.5rem);
+  margin: 0.75rem 0 0;
+  padding: var(--process-button-padding, 0.42rem 0.95rem);
+  border-color: rgba(132, 211, 228, 0.58);
+  border-radius: 999px;
+  color: #e4f4f4;
+  background: rgba(7, 35, 42, 0.9);
+  box-shadow: 0 0 18px rgba(67, 176, 201, 0.16);
+  font-size: var(--process-button-font-size, clamp(16px, 1.05vw, 19px));
+  pointer-events: auto;
+}
+
+@media (max-width: 900px), (max-height: 720px) {
+  .task4-story__panel {
+    width: min(22rem, 36vw);
+    right: 1rem;
+    bottom: 1rem;
+  }
+
+  .task4-story__field {
+    width: min(58rem, 74vw);
+  }
+
+  .task4-story__teaching {
+    width: min(31rem, 58vw);
+  }
+
+  .task4-story__investigation-diagram {
+    width: min(23rem, 36vw);
+    max-height: 31vh;
+  }
+}
+
+@media (max-width: 720px) {
+  .task4-story__panel {
+    width: min(20rem, calc(100vw - 2rem));
+  }
+
+  .task4-story__field {
+    width: min(92vw, 36rem);
+  }
+
+  .task4-story__teaching,
+  .task4-story__investigation-diagram {
+    width: min(88vw, 26rem);
+  }
 }

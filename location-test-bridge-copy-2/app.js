@@ -90,14 +90,13 @@
   const longitudeTeachingLines = document.querySelector("#longitudeTeachingLines");
   const longitudeTeachingLabels = document.querySelector("#longitudeTeachingLabels");
   const longitudeTeachingMarker = document.querySelector("#longitudeTeachingMarker");
-  // Task four stays dormant in Step 1. Its lifecycle is intentionally isolated
-  // from the existing task-one-to-three teaching stages.
   const task4Stage = document.querySelector("#task4Stage");
   const task4GlobeMount = document.querySelector("#task4GlobeMount");
 
   const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   const PROCESS_ACTION_DELAY = 2000;
   let task4Flow = null;
+  let task4Story = null;
 
   function initializeTask4Architecture() {
     if (task4Flow) return task4Flow;
@@ -105,6 +104,7 @@
     task4Flow = window.Task4Flow.create({
       stage: task4Stage,
       globeMount: task4GlobeMount,
+      taskIds: ["beijing", "rio-de-janeiro"],
       // Task-four checkpoint persistence is deliberately deferred.
       onCheckpoint: () => {},
     });
@@ -112,13 +112,39 @@
     return task4Flow;
   }
 
-  // Reserved hand-off for the future task-three completion route. It is not
-  // called in Step 1, so all existing tasks retain their current behavior.
-  function startTask4WhenImplemented() {
-    return initializeTask4Architecture()?.start() || null;
+  function startTask4LocationTest(taskId = null) {
+    return initializeTask4Architecture()?.start({ taskId }) || null;
   }
 
+  function initializeTask4Story() {
+    if (task4Story) return task4Story;
+    if (!window.Task4Story) return null;
+    task4Story = window.Task4Story.create({
+      stage: task4Stage,
+      // Keep the story-to-investigation hand-off inside the task-four lifecycle.
+      onContinueInvestigation: () => {
+        task4Stage.dispatchEvent(new CustomEvent("task4:continue-investigation", {
+          bubbles: true,
+        }));
+      },
+      onStartLocationTest: startTask4LocationTest,
+    });
+    task4Story.initialize();
+    return task4Story;
+  }
+
+  function startTask4Story({ saveCheckpoint = true } = {}) {
+    if (saveCheckpoint) updateCheckpoint("task4-start");
+    return initializeTask4Story()?.start() || null;
+  }
+
+  task4Stage.addEventListener("task4:continue-investigation", () => {
+    task4Story?.startLocationAnalysis();
+  });
+
   function destroyTask4WhenImplemented() {
+    task4Story?.destroy();
+    task4Story = null;
     task4Flow?.destroy();
     task4Flow = null;
   }
@@ -306,6 +332,11 @@
       title: "任务三：修复东西定位",
       startCheckpoint: "longitude-start",
     },
+    {
+      id: "task4",
+      title: "任务四：寻找回家的坐标",
+      startCheckpoint: "task4-start",
+    },
   ];
   const checkpointRegistry = {
     opening: { task: "opening", furthestTask: "opening" },
@@ -336,8 +367,9 @@
     "longitude-calibration-1-complete": { task: "longitude", furthestTask: "longitude" },
     "longitude-calibration-complete": { task: "longitude", furthestTask: "longitude" },
     "longitude-complete": { task: "longitude", furthestTask: "longitude" },
+    "task4-start": { task: "task4", furthestTask: "task4" },
   };
-  const taskOrder = ["opening", "task1", "position-test", "latitude", "longitude"];
+  const taskOrder = ["opening", "task1", "position-test", "latitude", "longitude", "task4"];
   let progressData = loadProgress();
   let activeCheckpoint = "opening";
 
@@ -426,6 +458,12 @@
       && taskOrder.indexOf(normalizedFurthestTask) < taskOrder.indexOf("longitude")
     ) {
       normalizedFurthestTask = "longitude";
+    }
+    if (
+      candidate.checkpoint === "task4-start"
+      && taskOrder.indexOf(normalizedFurthestTask) < taskOrder.indexOf("task4")
+    ) {
+      normalizedFurthestTask = "task4";
     }
     const normalizedCurrentTask = checkpointRegistry[candidate.checkpoint].task;
     const taskCheckpoints = {};
@@ -785,7 +823,7 @@
           calibration2Complete: false,
         },
       };
-    } else {
+    } else if (taskId === "longitude") {
       taskState = {
         longitude: {
           zeroAttempts: 0,
@@ -797,6 +835,10 @@
           calibration2Complete: false,
         },
       };
+    } else if (taskId === "task4") {
+      taskState = {};
+    } else {
+      return;
     }
     updateCheckpoint(task.startCheckpoint, { taskState });
     if (!setResumeRequest(task.startCheckpoint)) return;
@@ -2725,9 +2767,9 @@
     deviceNetworkValue.textContent = "经线、纬线";
     deviceNorthValue.textContent = "纬度识别已恢复";
     deviceEastValue.textContent = isComplete ? "经度识别已恢复" : "对应经线";
-    deviceSystemValue.textContent = isComplete ? "位置识别已恢复" : "仍未完成";
+    deviceSystemValue.textContent = isComplete ? "具体位置未确认" : "仍未完成";
     deviceSystemRow.classList.toggle("device-readout__fault", !isComplete);
-    deviceSystemRow.classList.toggle("device-readout__ready", isComplete);
+    deviceSystemRow.classList.remove("device-readout__ready");
   }
 
   async function showLongitudeTaskIntro(animate = false) {
@@ -3561,6 +3603,18 @@
     setDeviceOpen(true);
   }
 
+  function restoreTask4Start() {
+    destroyTask4WhenImplemented();
+    prepareCompletedTaskOneWorld();
+    longitudeTaskState.phase = "complete";
+    updateLongitudeDevice(true);
+    showFinalLocationKnowledgeSummary();
+    highlightDeviceUpdates(["east", "system"]);
+    device.classList.add("is-found");
+    setDeviceOpen(false);
+    startTask4Story({ saveCheckpoint: false });
+  }
+
   function updateSignalGuidePosition() {
     if (!signal.classList.contains("is-visible")) return;
     const guideBounds = signalGuide.getBoundingClientRect();
@@ -4088,6 +4142,7 @@
       completionDeviceReviewType = null;
       device.classList.remove("is-position-alert");
       if (completedType === "latitude") showLatitudeTaskEnding();
+      if (completedType === "longitude") startTask4Story();
       return;
     }
 
@@ -4519,6 +4574,9 @@
       case "longitude-complete":
         restoreLongitudeComplete();
         break;
+      case "task4-start":
+        restoreTask4Start();
+        break;
       default:
         beginOpening();
     }
@@ -4571,6 +4629,13 @@
         label,
         createProgressButton("跳过开场，进入任务一", "start-task1", "task1"),
       );
+      const task4Row = document.createElement("button");
+      task4Row.type = "button";
+      task4Row.className = "progress-task-row";
+      task4Row.dataset.taskId = "task4";
+      task4Row.dataset.progressAction = "replay-task";
+      task4Row.textContent = "任务四：寻找回家的坐标";
+      progressTaskList.append(task4Row);
       return;
     }
 
@@ -4586,7 +4651,7 @@
 
     const furthestIndex = taskOrder.indexOf(progressData.furthestTask);
     taskRegistry
-      .filter((task) => taskOrder.indexOf(task.id) <= furthestIndex)
+      .filter((task) => taskOrder.indexOf(task.id) <= furthestIndex || task.id === "task4")
       .forEach((task) => {
         const isCurrent = progressData.currentTask === task.id
           && progressData.checkpoint !== "position-test-complete"
@@ -4620,6 +4685,13 @@
 
         if (isCompleted) {
           row.textContent = `✓ ${task.title}`;
+          row.dataset.progressAction = "replay-task";
+          progressTaskList.append(row);
+          return;
+        }
+
+        if (task.id === "task4") {
+          row.textContent = task.title;
           row.dataset.progressAction = "replay-task";
           progressTaskList.append(row);
         }
@@ -5099,7 +5171,9 @@
       if (options?.classList.contains("progress-task-options")) {
         options.hidden = !options.hidden;
       }
+      return;
     }
+
   }
 
   progressContinue.addEventListener("click", handleProgressAction);

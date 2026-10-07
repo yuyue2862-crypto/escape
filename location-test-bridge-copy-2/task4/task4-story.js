@@ -1,0 +1,480 @@
+(() => {
+  "use strict";
+
+  const STORY_STATE = Object.freeze({
+    POSITION_CONFIRMATION_PENDING: "POSITION_CONFIRMATION_PENDING",
+    AWAITING_NEXT_STAGE: "AWAITING_NEXT_STAGE",
+    LOCATION_ANALYSIS: "LOCATION_ANALYSIS",
+    POSITION_PROBLEM_DISCOVERY: "POSITION_PROBLEM_DISCOVERY",
+    LATITUDE_INVESTIGATION: "LATITUDE_INVESTIGATION",
+    LATITUDE_DISCOVERED: "LATITUDE_DISCOVERED",
+    LONGITUDE_INVESTIGATION: "LONGITUDE_INVESTIGATION",
+    LONGITUDE_DISCOVERED: "LONGITUDE_DISCOVERED",
+    GRID_INTERSECTION_FOUND: "GRID_INTERSECTION_FOUND",
+    READY_FOR_LOCATION_TEST: "READY_FOR_LOCATION_TEST",
+    LOCATION_TEST: "LOCATION_TEST",
+  });
+
+  const ANALYSIS_LINE_DELAY = 480;
+
+  function create({ stage, onContinueInvestigation = null, onStartLocationTest = null } = {}) {
+    let storyNode = null;
+    let statusNode = null;
+    let logNode = null;
+    let problemNode = null;
+    let teachingNode = null;
+    let actionNode = null;
+    let phase = "idle";
+    let runToken = 0;
+    let destroyed = false;
+
+    const assertActive = () => {
+      if (destroyed) throw new Error("Task four story has been destroyed.");
+    };
+
+    const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+    const isCurrentRun = (token) => !destroyed && token === runToken;
+
+    const setState = (nextState) => {
+      phase = nextState;
+      storyNode.dataset.storyState = nextState;
+    };
+
+    const appendLogLine = (text, tone = "normal") => {
+      const line = logNode.ownerDocument.createElement("p");
+      line.className = "task4-story__log-line is-visible";
+      line.dataset.tone = tone;
+      line.textContent = text || "\u00a0";
+      logNode.append(line);
+      return line;
+    };
+
+    const clearField = () => {
+      problemNode.replaceChildren();
+      problemNode.hidden = true;
+      teachingNode.replaceChildren();
+      teachingNode.hidden = true;
+    };
+
+    const setAction = (label, { hidden = false, disabled = false } = {}) => {
+      actionNode.textContent = label;
+      actionNode.hidden = hidden;
+      actionNode.disabled = disabled;
+    };
+
+    const createSvgElement = (name, attributes = {}) => {
+      const node = stage.ownerDocument.createElementNS("http://www.w3.org/2000/svg", name);
+      Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, value));
+      return node;
+    };
+
+    const createText = (className, text) => {
+      const node = stage.ownerDocument.createElement("p");
+      node.className = className;
+      node.textContent = text;
+      return node;
+    };
+
+    const showQuestion = (firstLine, secondLine) => {
+      problemNode.hidden = false;
+      problemNode.replaceChildren();
+      const question = problemNode.ownerDocument.createElement("p");
+      question.className = "task4-story__question";
+      question.append(
+        firstLine,
+        problemNode.ownerDocument.createElement("br"),
+        secondLine,
+      );
+      problemNode.append(question);
+      return question;
+    };
+
+    const createDirectionInvestigation = (kind, { showCandidates = false, showFinding = false } = {}) => {
+      const isLatitude = kind === "latitude";
+      const investigation = stage.ownerDocument.createElement("section");
+      investigation.className = `task4-story__investigation task4-story__investigation--${kind}`;
+      const heading = stage.ownerDocument.createElement("h3");
+      heading.textContent = isLatitude ? "调查一条纬线" : "调查一条经线";
+      const prompt = createText(
+        "task4-story__investigation-prompt",
+        isLatitude
+          ? "只参考这条纬线，能锁定珠海吗？"
+          : "只参考这条经线，能锁定珠海吗？",
+      );
+      const diagram = createSvgElement("svg", {
+        class: "task4-story__investigation-diagram",
+        viewBox: "0 0 440 260",
+        "aria-hidden": "true",
+      });
+      diagram.append(createSvgElement("circle", {
+        class: "task4-story__lesson-sphere",
+        cx: "220",
+        cy: "130",
+        r: "102",
+      }));
+
+      if (isLatitude) {
+        diagram.append(createSvgElement("ellipse", {
+          class: "task4-story__lesson-line task4-story__lesson-line--latitude",
+          cx: "220",
+          cy: "130",
+          rx: "102",
+          ry: "30",
+        }));
+        if (showCandidates) {
+          [138, 220, 302].forEach((x) => diagram.append(createSvgElement("circle", {
+            class: "task4-story__candidate-point",
+            cx: String(x),
+            cy: String(130 - 30 * Math.sqrt(Math.max(0, 1 - ((x - 220) / 102) ** 2))),
+            r: "7",
+          })));
+        }
+      } else {
+        diagram.append(createSvgElement("path", {
+          class: "task4-story__lesson-line task4-story__lesson-line--longitude",
+          d: "M 220 28 C 147 92 147 168 220 232",
+        }));
+        if (showCandidates) {
+          [73, 130, 187].forEach((y) => diagram.append(createSvgElement("circle", {
+            class: "task4-story__candidate-point",
+            cx: String(220 - 73 * Math.sin(((y - 130) / 102) * Math.PI / 2)),
+            cy: String(y),
+            r: "7",
+          })));
+        }
+      }
+
+      investigation.append(heading, prompt, diagram);
+      if (showCandidates) {
+        investigation.append(createText(
+          "task4-story__observation",
+          isLatitude ? "同一条纬线经过多个候选位置。" : "同一条经线经过多个候选位置。",
+        ));
+      }
+      if (showFinding) {
+        investigation.append(createText(
+          "task4-story__finding",
+          isLatitude
+            ? "调查记录：纬线只能确定南北方向，不能确定具体地点。"
+            : "调查记录：经线只能确定东西方向，不能确定具体地点。",
+        ));
+      }
+      return investigation;
+    };
+
+    const createIntersectionInvestigation = ({ revealPoint = false, showFinding = false } = {}) => {
+      const investigation = stage.ownerDocument.createElement("section");
+      investigation.className = "task4-story__investigation task4-story__investigation--intersection";
+      const heading = stage.ownerDocument.createElement("h3");
+      heading.textContent = "组合两项调查";
+      const prompt = createText(
+        "task4-story__investigation-prompt",
+        revealPoint ? "两条线相交的位置，是否只剩一个？" : "把两项调查结果叠加，能锁定位置吗？",
+      );
+      const diagram = createSvgElement("svg", {
+        class: "task4-story__investigation-diagram",
+        viewBox: "0 0 440 260",
+        "aria-hidden": "true",
+      });
+      diagram.append(
+        createSvgElement("circle", {
+          class: "task4-story__lesson-sphere",
+          cx: "220",
+          cy: "130",
+          r: "102",
+        }),
+        createSvgElement("ellipse", {
+          class: "task4-story__lesson-line task4-story__lesson-line--latitude",
+          cx: "220",
+          cy: "130",
+          rx: "102",
+          ry: "30",
+        }),
+        createSvgElement("path", {
+          class: "task4-story__lesson-line task4-story__lesson-line--longitude",
+          d: "M 220 28 C 147 92 147 168 220 232",
+        }),
+      );
+      if (revealPoint) {
+        diagram.append(
+          createSvgElement("circle", {
+            class: "task4-story__intersection-halo",
+            cx: "175",
+            cy: "100",
+            r: "18",
+          }),
+          createSvgElement("circle", {
+            class: "task4-story__intersection-point",
+            cx: "175",
+            cy: "100",
+            r: "6",
+          }),
+        );
+      }
+      investigation.append(heading, prompt, diagram);
+      if (showFinding) {
+        investigation.append(createText(
+          "task4-story__finding",
+          "调查结果：两个方向的信息结合，才会留下一个具体位置。",
+        ));
+      }
+      return investigation;
+    };
+
+    const ensureStory = () => {
+      if (storyNode || !stage?.ownerDocument) return;
+      storyNode = stage.ownerDocument.createElement("section");
+      storyNode.className = "task4-story";
+      storyNode.setAttribute("aria-live", "polite");
+
+      const field = stage.ownerDocument.createElement("div");
+      field.className = "task4-story__field";
+      problemNode = stage.ownerDocument.createElement("div");
+      problemNode.className = "task4-story__problem";
+      problemNode.hidden = true;
+      teachingNode = stage.ownerDocument.createElement("div");
+      teachingNode.className = "task4-story__teaching";
+      teachingNode.hidden = true;
+      statusNode = stage.ownerDocument.createElement("p");
+      statusNode.className = "task4-story__status";
+      logNode = stage.ownerDocument.createElement("div");
+      logNode.className = "task4-story__log";
+      field.append(statusNode, logNode, problemNode, teachingNode);
+
+      actionNode = stage.ownerDocument.createElement("button");
+      actionNode.className = "task4-story__action";
+      actionNode.type = "button";
+      actionNode.addEventListener("click", handleAction);
+      storyNode.append(field, actionNode);
+      stage.append(storyNode);
+    };
+
+    const showPositionConfirmationPending = () => {
+      runToken += 1;
+      setState(STORY_STATE.POSITION_CONFIRMATION_PENDING);
+      clearField();
+      statusNode.textContent = "任务四：寻找回家的坐标";
+      logNode.replaceChildren();
+      showQuestion(
+        "南北定位和东西定位都已经恢复了。",
+        "可是，为什么还是不能确定珠海的具体位置？",
+      );
+      const note = problemNode.ownerDocument.createElement("p");
+      note.className = "task4-story__problem-note";
+      note.textContent = "返航定位器仍显示：具体位置未确认。";
+      problemNode.append(note);
+      setAction("继续调查");
+    };
+
+    const beginLatitudeInvestigation = () => {
+      setState(STORY_STATE.LATITUDE_INVESTIGATION);
+      statusNode.textContent = "位置确认调查";
+      logNode.replaceChildren();
+      appendLogLine("调查对象：一条纬线", "heading");
+      clearField();
+      teachingNode.replaceChildren(createDirectionInvestigation("latitude"));
+      teachingNode.hidden = false;
+      setAction("查看纬线经过的位置");
+    };
+
+    const showLatitudeCandidates = () => {
+      setState(STORY_STATE.POSITION_PROBLEM_DISCOVERY);
+      teachingNode.replaceChildren(createDirectionInvestigation("latitude", { showCandidates: true }));
+      setAction("记录纬线调查结果");
+    };
+
+    const recordLatitudeFinding = () => {
+      setState(STORY_STATE.LATITUDE_DISCOVERED);
+      teachingNode.replaceChildren(createDirectionInvestigation("latitude", {
+        showCandidates: true,
+        showFinding: true,
+      }));
+      setAction("调查经线");
+    };
+
+    const beginLongitudeInvestigation = () => {
+      setState(STORY_STATE.LONGITUDE_INVESTIGATION);
+      statusNode.textContent = "位置确认调查";
+      logNode.replaceChildren();
+      appendLogLine("调查对象：一条经线", "heading");
+      clearField();
+      teachingNode.replaceChildren(createDirectionInvestigation("longitude"));
+      teachingNode.hidden = false;
+      setAction("查看经线经过的位置");
+    };
+
+    const showLongitudeCandidates = () => {
+      setState(STORY_STATE.POSITION_PROBLEM_DISCOVERY);
+      teachingNode.replaceChildren(createDirectionInvestigation("longitude", { showCandidates: true }));
+      setAction("记录经线调查结果");
+    };
+
+    const recordLongitudeFinding = () => {
+      setState(STORY_STATE.LONGITUDE_DISCOVERED);
+      teachingNode.replaceChildren(createDirectionInvestigation("longitude", {
+        showCandidates: true,
+        showFinding: true,
+      }));
+      setAction("组合两项调查");
+    };
+
+    const beginIntersectionInvestigation = () => {
+      setState(STORY_STATE.GRID_INTERSECTION_FOUND);
+      statusNode.textContent = "位置确认调查";
+      logNode.replaceChildren();
+      appendLogLine("正在叠加两项调查结果……", "working");
+      clearField();
+      teachingNode.replaceChildren(createIntersectionInvestigation());
+      teachingNode.hidden = false;
+      setAction("叠加两条线");
+    };
+
+    const revealIntersection = () => {
+      setState(STORY_STATE.GRID_INTERSECTION_FOUND);
+      teachingNode.replaceChildren(createIntersectionInvestigation({ revealPoint: true }));
+      setAction("确认定位规律");
+    };
+
+    const showReadyForLocationTest = () => {
+      setState(STORY_STATE.READY_FOR_LOCATION_TEST);
+      statusNode.textContent = "定位系统检测";
+      logNode.replaceChildren();
+      appendLogLine("位置确认：已找到规律", "ready");
+      clearField();
+      teachingNode.replaceChildren(createIntersectionInvestigation({
+        revealPoint: true,
+        showFinding: true,
+      }));
+      teachingNode.hidden = false;
+      showQuestion("两个方向的信息结合，", "才能锁定一个具体位置。");
+      const detection = problemNode.ownerDocument.createElement("p");
+      detection.className = "task4-story__problem-note";
+      detection.textContent = "定位系统需要重新测试。";
+      problemNode.append(detection);
+      setAction("开始定位测试");
+    };
+
+    const runLocationAnalysis = async () => {
+      const token = ++runToken;
+      setState(STORY_STATE.LOCATION_ANALYSIS);
+      statusNode.textContent = "定位问题分析";
+      logNode.replaceChildren();
+      clearField();
+      setAction("", { hidden: true, disabled: true });
+      const analysisLines = [
+        ["正在分析位置确认问题……", "working"],
+        ["检测结果：", "heading"],
+        ["南北定位能力：正常 ✓", "ready"],
+        ["东西定位能力：正常 ✓", "ready"],
+        ["位置确认：未完成", "working"],
+      ];
+      for (const [text, tone] of analysisLines) {
+        if (!isCurrentRun(token)) return;
+        appendLogLine(text, tone);
+        await wait(ANALYSIS_LINE_DELAY);
+      }
+      if (!isCurrentRun(token)) return;
+      showQuestion("已经知道南北方向和东西方向，", "为什么还是无法确认唯一位置？");
+      setAction("先调查纬线");
+    };
+
+    function handleAction() {
+      if (destroyed) return;
+      if (phase === STORY_STATE.POSITION_CONFIRMATION_PENDING) {
+        setState(STORY_STATE.AWAITING_NEXT_STAGE);
+        setAction("", { hidden: true, disabled: true });
+        onContinueInvestigation?.();
+        return;
+      }
+      if (phase === STORY_STATE.LOCATION_ANALYSIS) {
+        beginLatitudeInvestigation();
+        return;
+      }
+      if (phase === STORY_STATE.LATITUDE_INVESTIGATION) {
+        showLatitudeCandidates();
+        return;
+      }
+      if (phase === STORY_STATE.POSITION_PROBLEM_DISCOVERY) {
+        if (teachingNode.querySelector(".task4-story__investigation--latitude")) {
+          recordLatitudeFinding();
+        } else {
+          recordLongitudeFinding();
+        }
+        return;
+      }
+      if (phase === STORY_STATE.LATITUDE_DISCOVERED) {
+        beginLongitudeInvestigation();
+        return;
+      }
+      if (phase === STORY_STATE.LONGITUDE_INVESTIGATION) {
+        showLongitudeCandidates();
+        return;
+      }
+      if (phase === STORY_STATE.LONGITUDE_DISCOVERED) {
+        beginIntersectionInvestigation();
+        return;
+      }
+      if (phase === STORY_STATE.GRID_INTERSECTION_FOUND) {
+        if (teachingNode.querySelector(".task4-story__intersection-point")) {
+          showReadyForLocationTest();
+        } else {
+          revealIntersection();
+        }
+        return;
+      }
+      if (phase !== STORY_STATE.READY_FOR_LOCATION_TEST) return;
+      setState(STORY_STATE.LOCATION_TEST);
+      storyNode.hidden = true;
+      stage?.classList.remove("is-story-mode");
+      setAction("", { hidden: true, disabled: true });
+      onStartLocationTest?.();
+    }
+
+    return Object.freeze({
+      initialize() {
+        assertActive();
+        ensureStory();
+        return this;
+      },
+
+      start() {
+        assertActive();
+        ensureStory();
+        storyNode.hidden = false;
+        stage?.classList.add("is-story-mode");
+        stage?.setAttribute("aria-hidden", "false");
+        stage?.removeAttribute("hidden");
+        showPositionConfirmationPending();
+      },
+
+      getState() {
+        return { phase, destroyed };
+      },
+
+      startLocationAnalysis() {
+        assertActive();
+        if (phase !== STORY_STATE.AWAITING_NEXT_STAGE) return false;
+        void runLocationAnalysis();
+        return true;
+      },
+
+      destroy() {
+        if (destroyed) return;
+        runToken += 1;
+        actionNode?.removeEventListener("click", handleAction);
+        stage?.classList.remove("is-story-mode");
+        storyNode?.remove();
+        storyNode = null;
+        statusNode = null;
+        logNode = null;
+        problemNode = null;
+        teachingNode = null;
+        actionNode = null;
+        phase = "destroyed";
+        destroyed = true;
+      },
+    });
+  }
+
+  window.Task4Story = Object.freeze({ create, STORY_STATE });
+})();
