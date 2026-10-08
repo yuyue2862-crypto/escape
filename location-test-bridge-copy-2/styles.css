@@ -1301,7 +1301,7 @@ button:focus-visible {
 .scan-result {
   position: absolute;
   left: 50%;
-  top: calc(100% - 0.3rem);
+  bottom: calc(100% + clamp(1.8rem, 4vh, 2.8rem));
   width: max-content;
   max-width: calc(100vw - 4rem);
   min-height: 2.2rem;
@@ -1312,7 +1312,7 @@ button:focus-visible {
   white-space: nowrap;
   text-align: center;
   opacity: 0;
-  transform: translate(-50%, 5px);
+  transform: translate(-50%, -5px);
   transition: opacity 0.65s ease, transform 0.65s var(--ease-calm);
 }
 
