@@ -4,6 +4,7 @@
   const STORY_STATE = Object.freeze({
     POSITION_CONFIRMATION_PENDING: "POSITION_CONFIRMATION_PENDING",
     AWAITING_NEXT_STAGE: "AWAITING_NEXT_STAGE",
+    AWAITING_S4_01: "AWAITING_S4_01",
     LOCATION_ANALYSIS: "LOCATION_ANALYSIS",
     POSITION_PROBLEM_DISCOVERY: "POSITION_PROBLEM_DISCOVERY",
     LATITUDE_INVESTIGATION: "LATITUDE_INVESTIGATION",
@@ -381,7 +382,7 @@
     function handleAction() {
       if (destroyed) return;
       if (phase === STORY_STATE.POSITION_CONFIRMATION_PENDING) {
-        setState(STORY_STATE.AWAITING_NEXT_STAGE);
+        setState(STORY_STATE.AWAITING_S4_01);
         setAction("", { hidden: true, disabled: true });
         onContinueInvestigation?.();
         return;

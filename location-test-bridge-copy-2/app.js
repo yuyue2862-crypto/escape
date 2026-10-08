@@ -121,11 +121,9 @@
     if (!window.Task4Story) return null;
     task4Story = window.Task4Story.create({
       stage: task4Stage,
-      // Keep the story-to-investigation hand-off inside the task-four lifecycle.
+      // S4-00 ends by waiting for the separately implemented S4-01.
       onContinueInvestigation: () => {
-        task4Stage.dispatchEvent(new CustomEvent("task4:continue-investigation", {
-          bubbles: true,
-        }));
+        task4Stage.dataset.nextStage = "s4-01";
       },
       onStartLocationTest: startTask4LocationTest,
     });
@@ -135,18 +133,16 @@
 
   function startTask4Story({ saveCheckpoint = true } = {}) {
     if (saveCheckpoint) updateCheckpoint("task4-start");
+    delete task4Stage.dataset.nextStage;
     return initializeTask4Story()?.start() || null;
   }
-
-  task4Stage.addEventListener("task4:continue-investigation", () => {
-    task4Story?.startLocationAnalysis();
-  });
 
   function destroyTask4WhenImplemented() {
     task4Story?.destroy();
     task4Story = null;
     task4Flow?.destroy();
     task4Flow = null;
+    delete task4Stage.dataset.nextStage;
   }
   const DEVICE_UPDATE_HIGHLIGHT_DURATION = 2600;
   const processActionRevealTokens = new WeakMap();
@@ -796,6 +792,12 @@
   function jumpToTask(taskId) {
     const task = taskRegistry.find((entry) => entry.id === taskId);
     if (!task) return;
+    if (
+      taskId === "task4"
+      && (!progressData || taskOrder.indexOf(progressData.furthestTask) < taskOrder.indexOf("task4"))
+    ) {
+      return;
+    }
     let taskState;
     if (taskId === "task1") {
       taskState = {
@@ -3610,9 +3612,9 @@
     updateLongitudeDevice(true);
     showFinalLocationKnowledgeSummary();
     highlightDeviceUpdates(["east", "system"]);
-    device.classList.add("is-found");
-    setDeviceOpen(false);
-    startTask4Story({ saveCheckpoint: false });
+    completionDeviceReviewType = "longitude";
+    device.classList.add("is-found", "is-position-alert");
+    setDeviceOpen(true);
   }
 
   function updateSignalGuidePosition() {
@@ -4629,13 +4631,6 @@
         label,
         createProgressButton("跳过开场，进入任务一", "start-task1", "task1"),
       );
-      const task4Row = document.createElement("button");
-      task4Row.type = "button";
-      task4Row.className = "progress-task-row";
-      task4Row.dataset.taskId = "task4";
-      task4Row.dataset.progressAction = "replay-task";
-      task4Row.textContent = "任务四：寻找回家的坐标";
-      progressTaskList.append(task4Row);
       return;
     }
 
@@ -4651,7 +4646,7 @@
 
     const furthestIndex = taskOrder.indexOf(progressData.furthestTask);
     taskRegistry
-      .filter((task) => taskOrder.indexOf(task.id) <= furthestIndex || task.id === "task4")
+      .filter((task) => taskOrder.indexOf(task.id) <= furthestIndex)
       .forEach((task) => {
         const isCurrent = progressData.currentTask === task.id
           && progressData.checkpoint !== "position-test-complete"
@@ -4688,12 +4683,6 @@
           row.dataset.progressAction = "replay-task";
           progressTaskList.append(row);
           return;
-        }
-
-        if (task.id === "task4") {
-          row.textContent = task.title;
-          row.dataset.progressAction = "replay-task";
-          progressTaskList.append(row);
         }
       });
   }
