@@ -69,6 +69,7 @@
   const latitudeIntroHint = document.querySelector("#latitudeIntroHint");
   const latitudeIntroStart = document.querySelector("#latitudeIntroStart");
   const latitudeStage = document.querySelector("#latitudeStage");
+  const latitudeKicker = latitudeStage.querySelector(".latitude-stage__kicker");
   const latitudePrompt = document.querySelector("#latitudePrompt");
   const latitudeFeedback = document.querySelector("#latitudeFeedback");
   const latitudeActions = document.querySelector("#latitudeActions");
@@ -125,6 +126,9 @@
       onContinueInvestigation: () => {
         task4Stage.dataset.nextStage = "s4-01";
       },
+      onStartNorthPositioning: () => {
+        void startTask4NorthPositioning();
+      },
       onStartLocationTest: startTask4LocationTest,
     });
     task4Story.initialize();
@@ -138,6 +142,7 @@
   }
 
   function destroyTask4WhenImplemented() {
+    resetTask4LatitudeBranch();
     task4Story?.destroy();
     task4Story = null;
     task4Flow?.destroy();
@@ -215,6 +220,8 @@
   const soundEffects = new Map();
   let positionDeviceReviewActive = false;
   let positionDeviceCloseResolver = null;
+  let task4DeviceCloseResolver = null;
+  let task4DeviceScanActive = false;
   let relationshipRecordResult = null;
   let latitudeQuestionSequence = 0;
   let longitudeQuestionSequence = 0;
@@ -257,6 +264,11 @@
     calibration2Complete: false,
     calibration1Errors: 0,
     calibration2Errors: 0,
+  };
+  const task4LatitudeState = {
+    phase: "idle",
+    answer: null,
+    runToken: 0,
   };
 
   const longitudeTeachingValues = [
@@ -2185,6 +2197,208 @@
     deviceSystemValue.textContent = "仍未完成";
     deviceSystemRow.classList.add("device-readout__fault");
     deviceSystemRow.classList.remove("device-readout__ready");
+  }
+
+  function updateTask4NorthReferenceDevice() {
+    deviceNetworkRow.hidden = false;
+    deviceNetworkValue.textContent = "经线、纬线";
+    deviceNorthValue.textContent = "珠海附近的参考纬度：20°N";
+    deviceEastValue.textContent = "经度识别已恢复";
+    deviceSystemValue.textContent = "具体位置未确认";
+    deviceSystemRow.classList.add("device-readout__fault");
+    deviceSystemRow.classList.remove("device-readout__ready");
+    highlightDeviceUpdates(["north", "system"]);
+  }
+
+  function showTask4NorthScanInProgress() {
+    deviceNetworkRow.hidden = false;
+    deviceNetworkValue.textContent = "经线、纬线";
+    deviceNorthValue.textContent = "南北定位扫描中…";
+    deviceEastValue.textContent = "经度识别已恢复";
+    deviceSystemValue.textContent = "正在获取参考纬度…";
+    deviceSystemRow.classList.add("device-readout__fault");
+    deviceSystemRow.classList.remove("device-readout__ready");
+    highlightDeviceUpdates(["north", "system"]);
+  }
+
+  function setTask4LatitudeActions(actions = [], mode = "process") {
+    clearProcessActionContainer(latitudeActions);
+    latitudeActions.classList.remove("is-answer-actions", "is-teaching-actions");
+    latitudeActions.classList.toggle("is-answer-actions", mode === "answer");
+    latitudeActions.classList.toggle("is-process-actions", mode === "process" && actions.length > 0);
+    actions.forEach(({ label, action, disabled = false }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.dataset.latitudeAction = action;
+      button.disabled = disabled;
+      latitudeActions.append(button);
+    });
+  }
+
+  function clearTask4LatitudeCandidates() {
+    latitudeTeachingLabels.querySelector(".task4-latitude-candidates")?.remove();
+  }
+
+  function showTask4LatitudeCandidates() {
+    clearTask4LatitudeCandidates();
+    const candidateLayer = createSvgElement("g", {
+      class: "task4-latitude-candidates",
+      "aria-label": "20度北纬线上的多个候选位置",
+    });
+    [-72, -48, -24, 0, 24, 48, 72].forEach((offset, index) => {
+      const point = projectOrthographicPoint(
+        getLatitudePoint(
+          20,
+          latitudeTravelLongitude + offset,
+          latitudeTeachingModel.radius,
+        ),
+        latitudeTeachingModel,
+      );
+      const candidate = createSvgElement("g", {
+        class: "task4-latitude-candidate",
+        transform: `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)})`,
+        style: `--candidate-index: ${index}`,
+      });
+      candidate.append(
+        createSvgElement("circle", { class: "task4-latitude-candidate__halo", r: 13 }),
+        createSvgElement("circle", { class: "task4-latitude-candidate__core", r: 4.5 }),
+      );
+      candidateLayer.append(candidate);
+    });
+    latitudeTeachingLabels.append(candidateLayer);
+  }
+
+  function resetTask4LatitudeBranch() {
+    task4LatitudeState.runToken += 1;
+    task4LatitudeState.phase = "idle";
+    task4LatitudeState.answer = null;
+    task4DeviceScanActive = false;
+    device.classList.remove("is-task4-north-scanning");
+    deviceClose.disabled = false;
+    const resolvePendingDeviceReview = task4DeviceCloseResolver;
+    task4DeviceCloseResolver = null;
+    resolvePendingDeviceReview?.();
+    clearTask4LatitudeCandidates();
+    getLatitudeLineGroup(20)?.classList.remove("is-calibration-target", "is-error-flash");
+    if (scene.classList.contains("task4-latitude-active")) {
+      scene.classList.remove("latitude-active", "task4-latitude-active");
+      latitudeStage.setAttribute("aria-hidden", "true");
+      setLatitudeLineInteraction(false);
+      setTask4LatitudeActions();
+      setLatitudeCopy();
+    }
+    latitudeStage.classList.remove("is-task4-latitude-layout");
+    latitudeKicker.textContent = "任务二：修复南北定位";
+  }
+
+  function activateTask4LatitudePractice() {
+    task4LatitudeState.phase = "WAITING_FOR_20N";
+    task4Story?.hideForLatitudePractice();
+    latitudeIntroStage.classList.remove("is-visible");
+    latitudeIntroStage.setAttribute("aria-hidden", "true");
+    latitudeStage.setAttribute("aria-hidden", "false");
+    latitudeStage.classList.add("is-task4-latitude-layout");
+    latitudeKicker.textContent = "任务四：寻找回家的坐标";
+    scene.classList.add("latitude-active", "task4-latitude-active");
+    setLatitudeStageMode();
+    buildLatitudeTeachingGlobe();
+    resetLatitudeTeachingVisuals();
+    showCompleteLatitudeNotation();
+    setLatitudeLineInteraction(true);
+    setTask4LatitudeActions();
+    setLatitudeCopy({ prompt: "请在球面上找到20°N纬线。" });
+  }
+
+  async function startTask4NorthPositioning() {
+    const token = ++task4LatitudeState.runToken;
+    task4LatitudeState.phase = "NORTH_SCAN_ACTIVE";
+    task4LatitudeState.answer = null;
+    task4DeviceScanActive = true;
+    showTask4NorthScanInProgress();
+    device.classList.add("is-found", "is-position-alert");
+    device.classList.add("is-task4-north-scanning");
+    deviceClose.disabled = true;
+
+    const deviceClosed = new Promise((resolve) => {
+      task4DeviceCloseResolver = resolve;
+    });
+    setDeviceOpen(true);
+    await wait(1200);
+    if (token !== task4LatitudeState.runToken || task4LatitudeState.phase !== "NORTH_SCAN_ACTIVE") return;
+    task4DeviceScanActive = false;
+    device.classList.remove("is-task4-north-scanning");
+    deviceClose.disabled = false;
+    updateTask4NorthReferenceDevice();
+    await deviceClosed;
+    if (token !== task4LatitudeState.runToken || task4LatitudeState.phase !== "NORTH_SCAN_ACTIVE") return;
+    task4LatitudeState.phase = "NORTH_SCAN_COMPLETE";
+    activateTask4LatitudePractice();
+  }
+
+  function handleTask4LatitudeSelection(latitude) {
+    if (task4LatitudeState.phase !== "WAITING_FOR_20N") return;
+    if (latitude !== 20) {
+      const errorGroup = getLatitudeLineGroup(latitude);
+      errorGroup?.classList.remove("is-error-flash");
+      window.requestAnimationFrame(() => errorGroup?.classList.add("is-error-flash"));
+      window.setTimeout(() => errorGroup?.classList.remove("is-error-flash"), 620);
+      const feedback = latitude <= 0
+        ? "20°N在赤道以北，再找找北纬20度。"
+        : "方向对了，再看看度数：目标是20°N。";
+      setLatitudeCopy({ prompt: "请在球面上找到20°N纬线。", feedback });
+      return;
+    }
+
+    task4LatitudeState.phase = "FOUND_20N";
+    setLatitudeLineInteraction(false);
+    getLatitudeLineGroup(20)?.classList.add("is-calibration-target");
+    showLatitudeDegree(20, "ns");
+    setLatitudeCopy({ prompt: "现在能确定珠海的具体位置了吗？" });
+    task4LatitudeState.phase = "WAITING_JUDGMENT";
+    setTask4LatitudeActions([
+      { label: "能", action: "task4-answer-can" },
+      { label: "不能", action: "task4-answer-cannot" },
+    ], "answer");
+  }
+
+  async function showTask4LatitudeEvidence(answer) {
+    const token = task4LatitudeState.runToken;
+    task4LatitudeState.phase = "SHOWING_CANDIDATES";
+    task4LatitudeState.answer = answer;
+    setTask4LatitudeActions();
+    showTask4LatitudeCandidates();
+    setLatitudeCopy({
+      prompt: "现在能确定珠海的具体位置了吗？",
+      feedback: answer === "can"
+        ? "这条线上有这么多可能位置，究竟是哪一个？"
+        : "判断正确。沿着整条20°N纬线，仍然有许多可能位置。",
+    });
+    await wait(1700);
+    if (token !== task4LatitudeState.runToken || task4LatitudeState.phase !== "SHOWING_CANDIDATES") return;
+    setTask4LatitudeActions([{ label: "我看清楚了", action: "task4-show-limitation" }]);
+  }
+
+  function showTask4LatitudeLimitation() {
+    task4LatitudeState.phase = "ONE_DIRECTION_LIMIT_FOUND";
+    setLatitudeCopy({
+      prompt: "只知道纬度，还不能确定一个地点的具体位置。",
+      feedback: "20°N只缩小了南北范围，整条纬线仍然保留着多个可能位置。",
+    });
+    setTask4LatitudeActions([{ label: "继续探索", action: "task4-continue-east-prompt" }]);
+  }
+
+  function finishTask4LatitudeBranch() {
+    task4LatitudeState.phase = "WAITING_EAST_POSITIONING";
+    scene.classList.remove("latitude-active", "task4-latitude-active");
+    latitudeStage.setAttribute("aria-hidden", "true");
+    latitudeStage.classList.remove("is-task4-latitude-layout");
+    setLatitudeLineInteraction(false);
+    setTask4LatitudeActions();
+    setLatitudeCopy();
+    clearTask4LatitudeCandidates();
+    latitudeKicker.textContent = "任务二：修复南北定位";
+    task4Story?.showEastDirectionPrompt();
   }
 
   function resetLatitudeTaskState() {
@@ -4120,6 +4334,7 @@
   }
 
   function setDeviceOpen(isOpen) {
+    if (!isOpen && task4DeviceScanActive) return;
     window.clearTimeout(deviceTimer);
     const wasOpen = device.classList.contains("is-open");
     device.classList.toggle("is-open", isOpen);
@@ -4128,10 +4343,17 @@
 
     if (isOpen) {
       if (!wasOpen) playSoundEffect("deviceOpen");
-      if (!positionDeviceReviewActive && !completionDeviceReviewType) {
+      if (!positionDeviceReviewActive && !completionDeviceReviewType && !task4DeviceCloseResolver) {
         deviceTimer = window.setTimeout(() => setDeviceOpen(false), 6800);
       }
       return;
+    }
+
+    if (task4DeviceCloseResolver) {
+      const resolveTask4DeviceReview = task4DeviceCloseResolver;
+      task4DeviceCloseResolver = null;
+      device.classList.remove("is-position-alert");
+      resolveTask4DeviceReview();
     }
 
     if (positionDeviceReviewActive) {
@@ -4266,6 +4488,10 @@
     window.clearTimeout(taskPromptTimer);
     positionDeviceReviewActive = false;
     positionDeviceCloseResolver = null;
+    task4DeviceCloseResolver = null;
+    task4DeviceScanActive = false;
+    device.classList.remove("is-task4-north-scanning");
+    deviceClose.disabled = false;
     completionDeviceReviewType = null;
     taskHasStarted = true;
 
@@ -4753,6 +4979,11 @@
   });
 
   function handleLatitudeLineSelection(latitude) {
+    if (task4LatitudeState.phase === "WAITING_FOR_20N") {
+      handleTask4LatitudeSelection(latitude);
+      return;
+    }
+
     if (latitudeTaskState.phase === "equator-question") {
       if (latitude !== 0) {
         setLatitudeCopy({
@@ -4826,6 +5057,27 @@
     const actionButton = event.target.closest("[data-latitude-action]");
     if (!actionButton) return;
     const action = actionButton.dataset.latitudeAction;
+
+    if (
+      (action === "task4-answer-can" || action === "task4-answer-cannot")
+      && task4LatitudeState.phase === "WAITING_JUDGMENT"
+    ) {
+      void showTask4LatitudeEvidence(action === "task4-answer-can" ? "can" : "cannot");
+      return;
+    }
+
+    if (action === "task4-show-limitation" && task4LatitudeState.phase === "SHOWING_CANDIDATES") {
+      showTask4LatitudeLimitation();
+      return;
+    }
+
+    if (
+      action === "task4-continue-east-prompt"
+      && task4LatitudeState.phase === "ONE_DIRECTION_LIMIT_FOUND"
+    ) {
+      finishTask4LatitudeBranch();
+      return;
+    }
 
     if (action === "continue-after-equator" && latitudeTaskState.phase === "equator-confirmed") {
       setLatitudeActions();

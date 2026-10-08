@@ -643,6 +643,162 @@
   line-height: 1.5;
 }
 
+/* S4-00 keeps all three opening lines in reserved slots before revealing them. */
+.task4-story__opening {
+  display: none;
+}
+
+.task4-story.is-opening-sequence .task4-story__field {
+  display: grid;
+  grid-template-rows: minmax(2.3rem, auto) minmax(7.5rem, 11rem);
+  row-gap: clamp(0.45rem, 1.25vh, 0.9rem);
+  align-items: start;
+}
+
+.task4-story.is-opening-sequence .task4-story__status {
+  grid-row: 1;
+  width: 100%;
+  margin: 0;
+}
+
+.task4-story.is-opening-sequence .task4-story__log,
+.task4-story.is-opening-sequence .task4-story__problem,
+.task4-story.is-opening-sequence .task4-story__teaching {
+  display: none;
+}
+
+.task4-story.is-opening-sequence .task4-story__opening {
+  display: grid;
+  grid-row: 2;
+  grid-template-rows: minmax(2rem, auto) minmax(5rem, 1fr);
+  row-gap: clamp(0.65rem, 1.7vh, 1rem);
+  width: 100%;
+  min-height: 0;
+}
+
+.task4-story.is-opening-sequence .task4-story__status,
+.task4-story.is-opening-sequence .task4-story__opening-note,
+.task4-story.is-opening-sequence .task4-story__opening-question {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.task4-story.is-opening-sequence .task4-story__opening-note,
+.task4-story.is-opening-sequence .task4-story__opening-question {
+  transition: opacity 620ms ease, visibility 620ms ease;
+}
+
+.task4-story.is-opening-sequence .task4-story__opening-note {
+  grid-row: 1;
+  margin: 0;
+  color: rgba(255, 226, 143, 0.9);
+  font-size: clamp(17px, 1.12vw, 21px);
+  line-height: 1.5;
+}
+
+.task4-story.is-opening-sequence .task4-story__opening-question {
+  grid-row: 2;
+  min-height: 5rem;
+  margin: 0;
+  color: rgba(241, 236, 216, 0.96);
+  font-size: var(--font-classroom, clamp(24px, 1.46vw, 28px));
+  font-weight: 500;
+  line-height: 1.62;
+  letter-spacing: 0.055em;
+  white-space: pre-line;
+}
+
+.task4-story.is-opening-sequence .task4-story__opening-note.is-opening-visible {
+  visibility: visible;
+  animation: task4-opening-note-in 1800ms ease-out forwards;
+}
+
+.task4-story.is-opening-sequence .task4-story__opening-question.is-opening-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.task4-story.is-opening-sequence .task4-story__opening-note.is-opening-leaving,
+.task4-story.is-opening-sequence .task4-story__opening-question.is-opening-leaving {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.task4-story.is-opening-sequence .task4-story__opening-question.is-s401-guide {
+  color: rgba(255, 242, 195, 0.98);
+}
+
+.task4-story.is-opening-sequence .task4-story__status.is-opening-visible {
+  visibility: visible;
+  animation: task4-opening-title-in 2000ms ease-out forwards;
+}
+
+@keyframes task4-opening-note-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes task4-opening-title-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* S4-01 reuses the Task 2 teaching globe; only its evidence markers are new. */
+.scene.task4-latitude-active .latitude-line-group.is-calibration-target .latitude-line {
+  stroke: rgba(255, 235, 157, 1);
+  stroke-width: 3.8;
+  filter: url(#latitudeGlow) drop-shadow(0 0 7px rgba(255, 210, 92, 0.44));
+}
+
+.task4-latitude-candidates {
+  pointer-events: none;
+}
+
+.task4-latitude-candidate {
+  opacity: 0;
+  animation: task4-latitude-candidate-in 420ms ease-out forwards;
+  animation-delay: calc(var(--candidate-index) * 120ms);
+}
+
+.task4-latitude-candidate__halo {
+  fill: rgba(255, 224, 120, 0.12);
+  stroke: rgba(255, 226, 132, 0.5);
+  stroke-width: 1.5;
+}
+
+.task4-latitude-candidate__core {
+  fill: rgba(255, 242, 195, 1);
+  stroke: rgba(80, 56, 12, 0.9);
+  stroke-width: 1.2;
+  filter: url(#latitudeGlow);
+}
+
+@keyframes task4-latitude-candidate-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The existing locator briefly signals an active north-position scan before
+   its reference latitude is written into the same readout. */
+.device.is-task4-north-scanning .device-panel__signal {
+  animation: task4-device-scan-signal 620ms ease-in-out infinite alternate;
+}
+
+.device.is-task4-north-scanning #deviceNorthValue,
+.device.is-task4-north-scanning #deviceSystemValue {
+  animation: task4-device-scan-copy 760ms ease-in-out infinite alternate;
+}
+
+@keyframes task4-device-scan-signal {
+  from { opacity: 0.42; transform: scale(0.78); }
+  to { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes task4-device-scan-copy {
+  from { opacity: 0.46; }
+  to { opacity: 1; }
+}
+
 .task4-story__teaching {
   width: min(38rem, 62vw);
   margin: clamp(0.8rem, 2vh, 1.4rem) auto 0;
@@ -731,13 +887,10 @@
 }
 
 .task4-story__action {
-  position: absolute;
-  z-index: 2;
-  right: clamp(6.5rem, 9vw, 10rem);
-  bottom: clamp(1.5rem, 6vh, 3.8rem);
+  position: static;
   min-width: var(--process-button-min-width, 7.5rem);
   min-height: var(--process-button-min-height, 2.5rem);
-  margin: 0.75rem 0 0;
+  margin: 0;
   padding: var(--process-button-padding, 0.42rem 0.95rem);
   border-color: rgba(132, 211, 228, 0.58);
   border-radius: 999px;
@@ -746,6 +899,43 @@
   box-shadow: 0 0 18px rgba(67, 176, 201, 0.16);
   font-size: var(--process-button-font-size, clamp(16px, 1.05vw, 19px));
   pointer-events: auto;
+}
+
+.task4-story__action-group {
+  display: flex;
+  justify-content: flex-end;
+  gap: clamp(0.55rem, 1.2vw, 0.9rem);
+  width: min(19rem, 100%);
+  margin: clamp(0.9rem, 2vh, 1.35rem) 0 0 auto;
+  pointer-events: auto;
+}
+
+.task4-story__action-group[hidden] {
+  display: none;
+}
+
+.task4-story.is-opening-sequence .task4-story__action-group {
+  grid-row: 3;
+  grid-column: 1;
+}
+
+.task4-story.is-s401-choice:not(.is-east-handoff) .task4-story__action-group {
+  justify-content: center;
+  width: max-content;
+  max-width: 100%;
+  margin-right: auto;
+}
+
+.task4-story.is-east-handoff .task4-story__action-group {
+  width: min(12rem, 100%);
+}
+
+.task4-story__action:disabled {
+  opacity: 0.48;
+  border-color: rgba(132, 211, 228, 0.24);
+  background: rgba(7, 35, 42, 0.58);
+  box-shadow: none;
+  cursor: default;
 }
 
 @media (max-width: 900px), (max-height: 720px) {

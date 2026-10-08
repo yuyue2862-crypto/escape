@@ -5,6 +5,10 @@
     POSITION_CONFIRMATION_PENDING: "POSITION_CONFIRMATION_PENDING",
     AWAITING_NEXT_STAGE: "AWAITING_NEXT_STAGE",
     AWAITING_S4_01: "AWAITING_S4_01",
+    S4_01_READY: "S4_01_READY",
+    WAITING_NORTH_POSITIONING: "WAITING_NORTH_POSITIONING",
+    NORTH_SCAN_ACTIVE: "NORTH_SCAN_ACTIVE",
+    WAITING_EAST_POSITIONING: "WAITING_EAST_POSITIONING",
     LOCATION_ANALYSIS: "LOCATION_ANALYSIS",
     POSITION_PROBLEM_DISCOVERY: "POSITION_PROBLEM_DISCOVERY",
     LATITUDE_INVESTIGATION: "LATITUDE_INVESTIGATION",
@@ -18,13 +22,23 @@
 
   const ANALYSIS_LINE_DELAY = 480;
 
-  function create({ stage, onContinueInvestigation = null, onStartLocationTest = null } = {}) {
+  function create({
+    stage,
+    onContinueInvestigation = null,
+    onStartNorthPositioning = null,
+    onStartLocationTest = null,
+  } = {}) {
     let storyNode = null;
     let statusNode = null;
     let logNode = null;
     let problemNode = null;
+    let openingNode = null;
+    let openingNoteNode = null;
+    let openingQuestionNode = null;
     let teachingNode = null;
+    let actionGroupNode = null;
     let actionNode = null;
+    let secondaryActionNode = null;
     let phase = "idle";
     let runToken = 0;
     let destroyed = false;
@@ -51,16 +65,35 @@
     };
 
     const clearField = () => {
+      storyNode?.classList.remove("is-opening-sequence", "is-s401-choice", "is-east-handoff");
+      openingNoteNode?.classList.remove("is-opening-visible", "is-opening-leaving");
+      openingQuestionNode?.classList.remove(
+        "is-opening-visible",
+        "is-opening-leaving",
+        "is-s401-guide",
+      );
+      openingNoteNode?.replaceChildren();
+      openingQuestionNode?.replaceChildren();
+      statusNode?.classList.remove("is-opening-visible");
+      if (statusNode) statusNode.hidden = false;
       problemNode.replaceChildren();
       problemNode.hidden = true;
       teachingNode.replaceChildren();
       teachingNode.hidden = true;
     };
 
-    const setAction = (label, { hidden = false, disabled = false } = {}) => {
+    const setAction = (
+      label,
+      { hidden = false, disabled = false, secondary = null } = {},
+    ) => {
       actionNode.textContent = label;
-      actionNode.hidden = hidden;
+      actionGroupNode.hidden = hidden;
       actionNode.disabled = disabled;
+      secondaryActionNode.hidden = !secondary;
+      if (secondary) {
+        secondaryActionNode.textContent = secondary.label;
+        secondaryActionNode.disabled = Boolean(secondary.disabled);
+      }
     };
 
     const createSvgElement = (name, attributes = {}) => {
@@ -79,6 +112,10 @@
     const showQuestion = (firstLine, secondLine) => {
       problemNode.hidden = false;
       problemNode.replaceChildren();
+      return appendQuestion(firstLine, secondLine);
+    };
+
+    const appendQuestion = (firstLine, secondLine) => {
       const question = problemNode.ownerDocument.createElement("p");
       question.className = "task4-story__question";
       question.append(
@@ -88,6 +125,16 @@
       );
       problemNode.append(question);
       return question;
+    };
+
+    const typeOpeningQuestion = async (text, token) => {
+      openingQuestionNode.classList.add("is-opening-visible");
+      for (const character of Array.from(text)) {
+        if (!isCurrentRun(token)) return false;
+        openingQuestionNode.textContent += character;
+        await wait(80);
+      }
+      return true;
     };
 
     const createDirectionInvestigation = (kind, { showCandidates = false, showFinding = false } = {}) => {
@@ -233,6 +280,13 @@
       problemNode = stage.ownerDocument.createElement("div");
       problemNode.className = "task4-story__problem";
       problemNode.hidden = true;
+      openingNode = stage.ownerDocument.createElement("div");
+      openingNode.className = "task4-story__opening";
+      openingNoteNode = stage.ownerDocument.createElement("p");
+      openingNoteNode.className = "task4-story__opening-note";
+      openingQuestionNode = stage.ownerDocument.createElement("p");
+      openingQuestionNode.className = "task4-story__opening-question";
+      openingNode.append(openingNoteNode, openingQuestionNode);
       teachingNode = stage.ownerDocument.createElement("div");
       teachingNode.className = "task4-story__teaching";
       teachingNode.hidden = true;
@@ -240,31 +294,101 @@
       statusNode.className = "task4-story__status";
       logNode = stage.ownerDocument.createElement("div");
       logNode.className = "task4-story__log";
-      field.append(statusNode, logNode, problemNode, teachingNode);
+      field.append(statusNode, logNode, openingNode, problemNode, teachingNode);
 
+      actionGroupNode = stage.ownerDocument.createElement("div");
+      actionGroupNode.className = "task4-story__action-group";
       actionNode = stage.ownerDocument.createElement("button");
       actionNode.className = "task4-story__action";
       actionNode.type = "button";
       actionNode.addEventListener("click", handleAction);
-      storyNode.append(field, actionNode);
+      secondaryActionNode = stage.ownerDocument.createElement("button");
+      secondaryActionNode.className = "task4-story__action";
+      secondaryActionNode.type = "button";
+      secondaryActionNode.hidden = true;
+      actionGroupNode.append(actionNode, secondaryActionNode);
+      field.append(actionGroupNode);
+      storyNode.append(field);
       stage.append(storyNode);
     };
 
     const showPositionConfirmationPending = () => {
-      runToken += 1;
+      const token = ++runToken;
       setState(STORY_STATE.POSITION_CONFIRMATION_PENDING);
       clearField();
       statusNode.textContent = "任务四：寻找回家的坐标";
       logNode.replaceChildren();
-      showQuestion(
-        "南北定位和东西定位都已经恢复了。",
-        "可是，为什么还是不能确定珠海的具体位置？",
-      );
-      const note = problemNode.ownerDocument.createElement("p");
-      note.className = "task4-story__problem-note";
-      note.textContent = "返航定位器仍显示：具体位置未确认。";
-      problemNode.append(note);
-      setAction("继续调查");
+      storyNode.classList.add("is-opening-sequence");
+      openingNoteNode.textContent = "返航定位器仍显示：具体位置未确认。";
+      const question = "南北定位和东西定位都已经恢复了，\n可是为什么还是不能确定珠海的具体位置？";
+      setAction("", { hidden: true, disabled: true });
+
+      void (async () => {
+        openingNoteNode.classList.add("is-opening-visible");
+        await wait(1800);
+        if (!isCurrentRun(token)) return;
+        await wait(1000);
+        if (!isCurrentRun(token)) return;
+        if (!await typeOpeningQuestion(question, token)) return;
+        await wait(1000);
+        if (!isCurrentRun(token)) return;
+        statusNode.classList.add("is-opening-visible");
+        await wait(2000);
+        if (!isCurrentRun(token)) return;
+        setAction("继续调查");
+      })();
+    };
+
+    const showS401DirectionChoice = async () => {
+      const token = ++runToken;
+      setState(STORY_STATE.S4_01_READY);
+      setAction("", { hidden: true, disabled: true });
+      onContinueInvestigation?.();
+      openingNoteNode.classList.remove("is-opening-visible");
+      openingNoteNode.classList.add("is-opening-leaving");
+      openingQuestionNode.classList.add("is-opening-leaving");
+      await wait(620);
+      if (!isCurrentRun(token)) return;
+
+      openingNoteNode.textContent = "";
+      openingNoteNode.classList.remove("is-opening-visible", "is-opening-leaving");
+      openingQuestionNode.textContent = "那先试试通过南北或者东西定位，寻找珠海的大概位置？";
+      openingQuestionNode.classList.remove("is-opening-leaving");
+      openingQuestionNode.classList.add("is-s401-guide");
+      storyNode.classList.add("is-s401-choice");
+      await wait(520);
+      if (!isCurrentRun(token)) return;
+
+      setState(STORY_STATE.WAITING_NORTH_POSITIONING);
+      setAction("南北定位", {
+        secondary: { label: "东西定位", disabled: true },
+      });
+    };
+
+    const hideForLatitudePractice = () => {
+      runToken += 1;
+      storyNode.hidden = true;
+      stage?.classList.remove("is-story-mode");
+      stage?.setAttribute("aria-hidden", "true");
+      if (stage) stage.hidden = true;
+      setAction("", { hidden: true, disabled: true });
+    };
+
+    const showEastDirectionPrompt = () => {
+      const token = ++runToken;
+      setState(STORY_STATE.WAITING_EAST_POSITIONING);
+      storyNode.hidden = false;
+      stage?.classList.add("is-story-mode");
+      stage?.setAttribute("aria-hidden", "false");
+      stage?.removeAttribute("hidden");
+      clearField();
+      storyNode.classList.add("is-opening-sequence", "is-s401-choice", "is-east-handoff");
+      statusNode.textContent = "任务四：寻找回家的坐标";
+      statusNode.classList.add("is-opening-visible");
+      openingQuestionNode.textContent = "南北定位还不能确定具体位置，那再试试东西定位？";
+      openingQuestionNode.classList.add("is-opening-visible", "is-s401-guide");
+      setAction("东西定位", { disabled: true });
+      return isCurrentRun(token);
     };
 
     const beginLatitudeInvestigation = () => {
@@ -384,7 +508,13 @@
       if (phase === STORY_STATE.POSITION_CONFIRMATION_PENDING) {
         setState(STORY_STATE.AWAITING_S4_01);
         setAction("", { hidden: true, disabled: true });
-        onContinueInvestigation?.();
+        void showS401DirectionChoice();
+        return;
+      }
+      if (phase === STORY_STATE.WAITING_NORTH_POSITIONING) {
+        setState(STORY_STATE.NORTH_SCAN_ACTIVE);
+        setAction("", { hidden: true, disabled: true });
+        onStartNorthPositioning?.();
         return;
       }
       if (phase === STORY_STATE.LOCATION_ANALYSIS) {
@@ -452,6 +582,16 @@
         return { phase, destroyed };
       },
 
+      hideForLatitudePractice() {
+        assertActive();
+        hideForLatitudePractice();
+      },
+
+      showEastDirectionPrompt() {
+        assertActive();
+        return showEastDirectionPrompt();
+      },
+
       startLocationAnalysis() {
         assertActive();
         if (phase !== STORY_STATE.AWAITING_NEXT_STAGE) return false;
@@ -469,8 +609,13 @@
         statusNode = null;
         logNode = null;
         problemNode = null;
+        openingNode = null;
+        openingNoteNode = null;
+        openingQuestionNode = null;
         teachingNode = null;
+        actionGroupNode = null;
         actionNode = null;
+        secondaryActionNode = null;
         phase = "destroyed";
         destroyed = true;
       },
