@@ -1634,7 +1634,7 @@
       createProjectionPaths(type, 20, "comparison-line")
         .forEach((path) => svg.append(path));
     } else {
-      [0, 60, 90].forEach((longitude, index) => {
+      [0, 20, 40, 60, 80].forEach((longitude, index) => {
         const className = index === 0
           ? "comparison-line"
           : "comparison-line comparison-line--soft";
@@ -3440,6 +3440,9 @@
     longitudeTeachingLines.querySelectorAll(".longitude-line-group").forEach((group) => {
       group.classList.remove("is-calibration-target", "is-calibration-pulse");
     });
+    // The 180° line is useful while explaining east/west notation, but it
+    // competes visually with the 150°E target in this calibration question.
+    getLongitudeLineGroup(-180)?.classList.remove("is-antimeridian-highlight");
     getLongitudeLineGroup(150)?.classList.add("is-calibration-target", "is-calibration-pulse");
     const targetLabel = getLongitudeDegreeLabel("east", 150);
     targetLabel?.classList.add("is-target-hidden");
