@@ -724,6 +724,13 @@
   visibility: hidden;
 }
 
+.task4-story.is-opening-sequence .task4-story__opening-note.is-direction-feedback {
+  color: rgba(255, 226, 143, 0.96);
+  opacity: 1;
+  visibility: visible;
+  animation: none;
+}
+
 .task4-story.is-opening-sequence .task4-story__opening-question.is-s401-guide {
   color: rgba(255, 242, 195, 0.98);
 }
@@ -919,15 +926,20 @@
   grid-column: 1;
 }
 
-.task4-story.is-s401-choice:not(.is-east-handoff) .task4-story__action-group {
+.task4-story.is-s401-choice .task4-story__action-group {
   justify-content: center;
   width: max-content;
   max-width: 100%;
   margin-right: auto;
+  gap: 2em;
+  font-size: clamp(22px, 1.55vw, 28px);
 }
 
-.task4-story.is-east-handoff .task4-story__action-group {
-  width: min(12rem, 100%);
+.task4-story.is-s401-choice .task4-story__action {
+  min-width: clamp(10.5rem, 14vw, 13rem);
+  min-height: clamp(3.4rem, 6.4vh, 4rem);
+  padding: clamp(0.76rem, 1.4vh, 0.95rem) clamp(1.35rem, 2.2vw, 1.8rem);
+  font-size: 1em;
 }
 
 .task4-story__action:disabled {

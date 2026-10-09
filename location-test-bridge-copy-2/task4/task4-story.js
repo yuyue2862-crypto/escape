@@ -66,7 +66,11 @@
 
     const clearField = () => {
       storyNode?.classList.remove("is-opening-sequence", "is-s401-choice", "is-east-handoff");
-      openingNoteNode?.classList.remove("is-opening-visible", "is-opening-leaving");
+      openingNoteNode?.classList.remove(
+        "is-opening-visible",
+        "is-opening-leaving",
+        "is-direction-feedback",
+      );
       openingQuestionNode?.classList.remove(
         "is-opening-visible",
         "is-opening-leaving",
@@ -94,6 +98,12 @@
         secondaryActionNode.textContent = secondary.label;
         secondaryActionNode.disabled = Boolean(secondary.disabled);
       }
+    };
+
+    const showDirectionFeedback = (text) => {
+      openingNoteNode.textContent = text;
+      openingNoteNode.classList.remove("is-opening-visible", "is-opening-leaving");
+      openingNoteNode.classList.add("is-direction-feedback");
     };
 
     const createSvgElement = (name, attributes = {}) => {
@@ -352,7 +362,7 @@
 
       openingNoteNode.textContent = "";
       openingNoteNode.classList.remove("is-opening-visible", "is-opening-leaving");
-      openingQuestionNode.textContent = "那先试试通过南北或者东西定位，寻找珠海的大概位置？";
+      openingQuestionNode.textContent = "尝试通过南北/东西定位，确定珠海的大概位置？";
       openingQuestionNode.classList.remove("is-opening-leaving");
       openingQuestionNode.classList.add("is-s401-guide");
       storyNode.classList.add("is-s401-choice");
@@ -382,12 +392,14 @@
       stage?.setAttribute("aria-hidden", "false");
       stage?.removeAttribute("hidden");
       clearField();
-      storyNode.classList.add("is-opening-sequence", "is-s401-choice", "is-east-handoff");
+      storyNode.classList.add("is-opening-sequence", "is-s401-choice");
       statusNode.textContent = "任务四：寻找回家的坐标";
       statusNode.classList.add("is-opening-visible");
       openingQuestionNode.textContent = "南北定位还不能确定具体位置，那再试试东西定位？";
       openingQuestionNode.classList.add("is-opening-visible", "is-s401-guide");
-      setAction("东西定位", { disabled: true });
+      setAction("南北定位", {
+        secondary: { label: "东西定位", disabled: true },
+      });
       return isCurrentRun(token);
     };
 
@@ -515,6 +527,10 @@
         setState(STORY_STATE.NORTH_SCAN_ACTIVE);
         setAction("", { hidden: true, disabled: true });
         onStartNorthPositioning?.();
+        return;
+      }
+      if (phase === STORY_STATE.WAITING_EAST_POSITIONING) {
+        showDirectionFeedback("已做过测试，无法确定，请选择东西定位");
         return;
       }
       if (phase === STORY_STATE.LOCATION_ANALYSIS) {

@@ -2324,7 +2324,7 @@
       task4DeviceCloseResolver = resolve;
     });
     setDeviceOpen(true);
-    await wait(1200);
+    await wait(2000);
     if (token !== task4LatitudeState.runToken || task4LatitudeState.phase !== "NORTH_SCAN_ACTIVE") return;
     task4DeviceScanActive = false;
     device.classList.remove("is-task4-north-scanning");
