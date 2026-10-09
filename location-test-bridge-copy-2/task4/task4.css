@@ -10,6 +10,15 @@
   display: none;
 }
 
+.scene.task4-story-active .task-prompt,
+.scene.task4-story-active .task-reminder,
+.scene.task4-story-active .scan-records,
+.scene.task4-story-active .investigation-feedback {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .task4-story {
   position: absolute;
   z-index: 4;
@@ -776,9 +785,9 @@
 
 .task4-story__summary-line {
   margin: 0;
-  color: rgba(241, 236, 216, 0.96);
-  font-size: var(--font-classroom, clamp(21px, 1.38vw, 27px));
-  font-weight: 500;
+  color: rgba(225, 220, 202, 0.9);
+  font-size: var(--font-classroom, clamp(20px, 1.28vw, 25px));
+  font-weight: 450;
   line-height: 1.58;
   letter-spacing: 0.04em;
   opacity: 0;
@@ -786,8 +795,17 @@
   transition: opacity 720ms ease-out, visibility 720ms ease-out;
 }
 
-.task4-story__summary-line--4 {
+.task4-story__summary-line--finding {
+  color: rgba(247, 239, 207, 0.98);
+  font-size: var(--font-classroom, clamp(23px, 1.48vw, 29px));
+  font-weight: 600;
+  margin-top: clamp(0.18rem, 0.55vh, 0.42rem);
+}
+
+.task4-story__summary-line--question {
   color: rgba(255, 226, 143, 0.98);
+  font-size: var(--font-classroom, clamp(22px, 1.42vw, 28px));
+  font-weight: 550;
   margin-top: clamp(0.35rem, 1vh, 0.75rem);
 }
 

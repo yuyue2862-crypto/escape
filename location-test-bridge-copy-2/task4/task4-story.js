@@ -6,6 +6,7 @@
     AWAITING_NEXT_STAGE: "AWAITING_NEXT_STAGE",
     AWAITING_S4_01: "AWAITING_S4_01",
     S4_01_READY: "S4_01_READY",
+    WAITING_DIRECTION_CHOICE: "WAITING_DIRECTION_CHOICE",
     WAITING_NORTH_POSITIONING: "WAITING_NORTH_POSITIONING",
     NORTH_SCAN_ACTIVE: "NORTH_SCAN_ACTIVE",
     WAITING_EAST_POSITIONING: "WAITING_EAST_POSITIONING",
@@ -44,6 +45,7 @@
     let phase = "idle";
     let runToken = 0;
     let destroyed = false;
+    let completedDirections = new Set();
 
     const assertActive = () => {
       if (destroyed) throw new Error("Task four story has been destroyed.");
@@ -382,9 +384,10 @@
       await wait(520);
       if (!isCurrentRun(token)) return;
 
-      setState(STORY_STATE.WAITING_NORTH_POSITIONING);
+      completedDirections = new Set();
+      setState(STORY_STATE.WAITING_DIRECTION_CHOICE);
       setAction("南北定位", {
-        secondary: { label: "东西定位", disabled: true },
+        secondary: { label: "东西定位", disabled: false },
       });
     };
 
@@ -397,9 +400,10 @@
       setAction("", { hidden: true, disabled: true });
     };
 
-    const showEastDirectionPrompt = () => {
+    const showDirectionChoice = ({ completed = [], lastCompletedDirection = null } = {}) => {
       const token = ++runToken;
-      setState(STORY_STATE.WAITING_EAST_POSITIONING);
+      completedDirections = new Set(completed);
+      setState(STORY_STATE.WAITING_DIRECTION_CHOICE);
       storyNode.hidden = false;
       stage?.classList.add("is-story-mode");
       stage?.setAttribute("aria-hidden", "false");
@@ -408,7 +412,11 @@
       storyNode.classList.add("is-opening-sequence", "is-s401-choice");
       statusNode.textContent = "任务四：寻找回家的坐标";
       statusNode.classList.add("is-opening-visible");
-      openingQuestionNode.textContent = "南北定位还不能确定具体位置，那再试试东西定位？";
+      openingQuestionNode.textContent = lastCompletedDirection === "east"
+        ? "东西定位还不能确定具体位置，那再试试南北定位？"
+        : lastCompletedDirection === "north"
+          ? "南北定位还不能确定具体位置，那再试试东西定位？"
+          : "尝试通过南北/东西定位，确定珠海的大概位置？";
       openingQuestionNode.classList.add("is-opening-visible", "is-s401-guide");
       setAction("南北定位", {
         secondary: { label: "东西定位", disabled: false },
@@ -416,7 +424,7 @@
       return isCurrentRun(token);
     };
 
-    const showDirectionSummary = () => {
+    const showDirectionSummary = (directionOrder = []) => {
       const token = ++runToken;
       setState("S4_02_DIRECTION_SUMMARY");
       storyNode.hidden = false;
@@ -427,20 +435,29 @@
       storyNode.classList.add("is-s402-summary");
       statusNode.textContent = "任务四：寻找回家的坐标";
       statusNode.classList.add("is-opening-visible");
+      const recordByDirection = {
+        north: "南北定位，找到了一条纬线，但无法确定具体位置。",
+        east: "东西定位，找到了一条经线，也无法确定具体位置。",
+      };
+      const orderedRecords = directionOrder
+        .filter((direction) => recordByDirection[direction])
+        .map((direction) => recordByDirection[direction]);
+      const records = orderedRecords.length === 2
+        ? orderedRecords
+        : [recordByDirection.north, recordByDirection.east];
       [
-        "南北定位，找到了一条纬线，但无法确定具体位置。",
-        "东西定位，找到了一条经线，也无法确定具体位置。",
+        ...records,
         "看来，单凭一条纬线或者一条经线，都无法确定一个地点的具体位置。",
         "那么，接下来还能用什么办法确定珠海的位置？",
       ].forEach((text, index) => {
+        const level = index < 2 ? "record" : index === 2 ? "finding" : "question";
         summaryNode.append(createText(
-          `task4-story__summary-line task4-story__summary-line--${index + 1}`,
+          `task4-story__summary-line task4-story__summary-line--${level}`,
           text,
         ));
       });
       summaryNode.hidden = false;
       setAction("", { hidden: true, disabled: true });
-      stage.dataset.nextStage = "s4-03";
       void (async () => {
         for (const line of summaryNode.children) {
           if (!isCurrentRun(token)) return;
@@ -570,14 +587,14 @@
         void showS401DirectionChoice();
         return;
       }
-      if (phase === STORY_STATE.WAITING_NORTH_POSITIONING) {
+      if (phase === STORY_STATE.WAITING_DIRECTION_CHOICE) {
+        if (completedDirections.has("north")) {
+          showDirectionFeedback("已做过测试，无法确定，请选择东西定位");
+          return;
+        }
         setState(STORY_STATE.NORTH_SCAN_ACTIVE);
         setAction("", { hidden: true, disabled: true });
         onStartNorthPositioning?.();
-        return;
-      }
-      if (phase === STORY_STATE.WAITING_EAST_POSITIONING) {
-        showDirectionFeedback("已做过测试，无法确定，请选择东西定位");
         return;
       }
       if (phase === STORY_STATE.LOCATION_ANALYSIS) {
@@ -625,7 +642,11 @@
     }
 
     function handleSecondaryAction() {
-      if (destroyed || phase !== STORY_STATE.WAITING_EAST_POSITIONING) return;
+      if (destroyed || phase !== STORY_STATE.WAITING_DIRECTION_CHOICE) return;
+      if (completedDirections.has("east")) {
+        showDirectionFeedback("已做过测试，无法确定，请选择南北定位");
+        return;
+      }
       setState("EAST_SCAN_ACTIVE");
       setAction("", { hidden: true, disabled: true });
       onStartEastPositioning?.();
@@ -662,14 +683,14 @@
         hideForLatitudePractice();
       },
 
-      showEastDirectionPrompt() {
+      showDirectionChoice(options) {
         assertActive();
-        return showEastDirectionPrompt();
+        return showDirectionChoice(options);
       },
 
-      showDirectionSummary() {
+      showDirectionSummary(directionOrder) {
         assertActive();
-        showDirectionSummary();
+        showDirectionSummary(directionOrder);
       },
 
       startLocationAnalysis() {
