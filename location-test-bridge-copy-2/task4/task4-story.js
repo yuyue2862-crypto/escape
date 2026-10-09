@@ -10,6 +10,7 @@
     WAITING_NORTH_POSITIONING: "WAITING_NORTH_POSITIONING",
     NORTH_SCAN_ACTIVE: "NORTH_SCAN_ACTIVE",
     WAITING_EAST_POSITIONING: "WAITING_EAST_POSITIONING",
+    S4_03A_RECORDS_READY: "S4_03A_RECORDS_READY",
     LOCATION_ANALYSIS: "LOCATION_ANALYSIS",
     POSITION_PROBLEM_DISCOVERY: "POSITION_PROBLEM_DISCOVERY",
     LATITUDE_INVESTIGATION: "LATITUDE_INVESTIGATION",
@@ -28,6 +29,7 @@
     onContinueInvestigation = null,
     onStartNorthPositioning = null,
     onStartEastPositioning = null,
+    onViewLocationRecords = null,
     onStartLocationTest = null,
   } = {}) {
     let storyNode = null;
@@ -88,6 +90,7 @@
       openingNoteNode?.replaceChildren();
       openingQuestionNode?.replaceChildren();
       summaryNode?.replaceChildren();
+      summaryNode?.classList.remove("is-leaving", "is-s403a-question");
       if (summaryNode) summaryNode.hidden = true;
       statusNode?.classList.remove("is-opening-visible");
       if (statusNode) statusNode.hidden = false;
@@ -464,6 +467,26 @@
           line.classList.add("is-visible");
           await wait(1100);
         }
+        if (!isCurrentRun(token)) return;
+        // The yellow suspense question keeps its original per-line hold, plus
+        // two additional seconds for observation before this group leaves.
+        await wait(2000);
+        if (!isCurrentRun(token)) return;
+        summaryNode.classList.add("is-leaving");
+        await wait(720);
+        if (!isCurrentRun(token)) return;
+        summaryNode.replaceChildren(createText(
+          "task4-story__summary-line task4-story__summary-line--question",
+          "之前扫描得到的信息真的没有用吗？",
+        ));
+        summaryNode.classList.remove("is-leaving");
+        summaryNode.classList.add("is-s403a-question");
+        const questionLine = summaryNode.firstElementChild;
+        window.requestAnimationFrame(() => questionLine?.classList.add("is-visible"));
+        await wait(720);
+        if (!isCurrentRun(token)) return;
+        setState(STORY_STATE.S4_03A_RECORDS_READY);
+        setAction("查看定位记录");
       })();
     };
 
@@ -595,6 +618,11 @@
         setState(STORY_STATE.NORTH_SCAN_ACTIVE);
         setAction("", { hidden: true, disabled: true });
         onStartNorthPositioning?.();
+        return;
+      }
+      if (phase === STORY_STATE.S4_03A_RECORDS_READY) {
+        setAction("", { hidden: true, disabled: true });
+        onViewLocationRecords?.();
         return;
       }
       if (phase === STORY_STATE.LOCATION_ANALYSIS) {
