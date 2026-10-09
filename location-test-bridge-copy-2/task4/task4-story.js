@@ -26,6 +26,7 @@
     stage,
     onContinueInvestigation = null,
     onStartNorthPositioning = null,
+    onStartEastPositioning = null,
     onStartLocationTest = null,
   } = {}) {
     let storyNode = null;
@@ -35,6 +36,7 @@
     let openingNode = null;
     let openingNoteNode = null;
     let openingQuestionNode = null;
+    let summaryNode = null;
     let teachingNode = null;
     let actionGroupNode = null;
     let actionNode = null;
@@ -65,7 +67,12 @@
     };
 
     const clearField = () => {
-      storyNode?.classList.remove("is-opening-sequence", "is-s401-choice", "is-east-handoff");
+      storyNode?.classList.remove(
+        "is-opening-sequence",
+        "is-s401-choice",
+        "is-east-handoff",
+        "is-s402-summary",
+      );
       openingNoteNode?.classList.remove(
         "is-opening-visible",
         "is-opening-leaving",
@@ -78,6 +85,8 @@
       );
       openingNoteNode?.replaceChildren();
       openingQuestionNode?.replaceChildren();
+      summaryNode?.replaceChildren();
+      if (summaryNode) summaryNode.hidden = true;
       statusNode?.classList.remove("is-opening-visible");
       if (statusNode) statusNode.hidden = false;
       problemNode.replaceChildren();
@@ -297,6 +306,9 @@
       openingQuestionNode = stage.ownerDocument.createElement("p");
       openingQuestionNode.className = "task4-story__opening-question";
       openingNode.append(openingNoteNode, openingQuestionNode);
+      summaryNode = stage.ownerDocument.createElement("div");
+      summaryNode.className = "task4-story__summary";
+      summaryNode.hidden = true;
       teachingNode = stage.ownerDocument.createElement("div");
       teachingNode.className = "task4-story__teaching";
       teachingNode.hidden = true;
@@ -304,7 +316,7 @@
       statusNode.className = "task4-story__status";
       logNode = stage.ownerDocument.createElement("div");
       logNode.className = "task4-story__log";
-      field.append(statusNode, logNode, openingNode, problemNode, teachingNode);
+      field.append(statusNode, logNode, openingNode, summaryNode, problemNode, teachingNode);
 
       actionGroupNode = stage.ownerDocument.createElement("div");
       actionGroupNode.className = "task4-story__action-group";
@@ -316,6 +328,7 @@
       secondaryActionNode.className = "task4-story__action";
       secondaryActionNode.type = "button";
       secondaryActionNode.hidden = true;
+      secondaryActionNode.addEventListener("click", handleSecondaryAction);
       actionGroupNode.append(actionNode, secondaryActionNode);
       field.append(actionGroupNode);
       storyNode.append(field);
@@ -398,9 +411,43 @@
       openingQuestionNode.textContent = "南北定位还不能确定具体位置，那再试试东西定位？";
       openingQuestionNode.classList.add("is-opening-visible", "is-s401-guide");
       setAction("南北定位", {
-        secondary: { label: "东西定位", disabled: true },
+        secondary: { label: "东西定位", disabled: false },
       });
       return isCurrentRun(token);
+    };
+
+    const showDirectionSummary = () => {
+      const token = ++runToken;
+      setState("S4_02_DIRECTION_SUMMARY");
+      storyNode.hidden = false;
+      stage?.classList.add("is-story-mode");
+      stage?.setAttribute("aria-hidden", "false");
+      stage?.removeAttribute("hidden");
+      clearField();
+      storyNode.classList.add("is-s402-summary");
+      statusNode.textContent = "任务四：寻找回家的坐标";
+      statusNode.classList.add("is-opening-visible");
+      [
+        "南北定位，找到了一条纬线，但无法确定具体位置。",
+        "东西定位，找到了一条经线，也无法确定具体位置。",
+        "看来，单凭一条纬线或者一条经线，都无法确定一个地点的具体位置。",
+        "那么，接下来还能用什么办法确定珠海的位置？",
+      ].forEach((text, index) => {
+        summaryNode.append(createText(
+          `task4-story__summary-line task4-story__summary-line--${index + 1}`,
+          text,
+        ));
+      });
+      summaryNode.hidden = false;
+      setAction("", { hidden: true, disabled: true });
+      stage.dataset.nextStage = "s4-03";
+      void (async () => {
+        for (const line of summaryNode.children) {
+          if (!isCurrentRun(token)) return;
+          line.classList.add("is-visible");
+          await wait(1100);
+        }
+      })();
     };
 
     const beginLatitudeInvestigation = () => {
@@ -577,6 +624,13 @@
       onStartLocationTest?.();
     }
 
+    function handleSecondaryAction() {
+      if (destroyed || phase !== STORY_STATE.WAITING_EAST_POSITIONING) return;
+      setState("EAST_SCAN_ACTIVE");
+      setAction("", { hidden: true, disabled: true });
+      onStartEastPositioning?.();
+    }
+
     return Object.freeze({
       initialize() {
         assertActive();
@@ -603,9 +657,19 @@
         hideForLatitudePractice();
       },
 
+      hideForLongitudePractice() {
+        assertActive();
+        hideForLatitudePractice();
+      },
+
       showEastDirectionPrompt() {
         assertActive();
         return showEastDirectionPrompt();
+      },
+
+      showDirectionSummary() {
+        assertActive();
+        showDirectionSummary();
       },
 
       startLocationAnalysis() {
@@ -619,6 +683,7 @@
         if (destroyed) return;
         runToken += 1;
         actionNode?.removeEventListener("click", handleAction);
+        secondaryActionNode?.removeEventListener("click", handleSecondaryAction);
         stage?.classList.remove("is-story-mode");
         storyNode?.remove();
         storyNode = null;
@@ -628,6 +693,7 @@
         openingNode = null;
         openingNoteNode = null;
         openingQuestionNode = null;
+        summaryNode = null;
         teachingNode = null;
         actionGroupNode = null;
         actionNode = null;

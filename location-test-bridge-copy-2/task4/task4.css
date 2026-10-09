@@ -740,6 +740,62 @@
   animation: task4-opening-title-in 2000ms ease-out forwards;
 }
 
+.task4-story__summary {
+  display: none;
+}
+
+.task4-story.is-s402-summary .task4-story__field {
+  display: grid;
+  grid-template-rows: minmax(2.3rem, auto) minmax(10rem, auto);
+  row-gap: clamp(0.75rem, 1.8vh, 1.25rem);
+  align-items: start;
+}
+
+.task4-story.is-s402-summary .task4-story__status {
+  grid-row: 1;
+  width: 100%;
+  margin: 0;
+  visibility: visible;
+  opacity: 1;
+}
+
+.task4-story.is-s402-summary .task4-story__opening,
+.task4-story.is-s402-summary .task4-story__log,
+.task4-story.is-s402-summary .task4-story__problem,
+.task4-story.is-s402-summary .task4-story__teaching {
+  display: none;
+}
+
+.task4-story.is-s402-summary .task4-story__summary {
+  display: grid;
+  grid-row: 2;
+  grid-template-rows: repeat(4, minmax(2rem, auto));
+  row-gap: clamp(0.55rem, 1.35vh, 0.9rem);
+  width: 100%;
+}
+
+.task4-story__summary-line {
+  margin: 0;
+  color: rgba(241, 236, 216, 0.96);
+  font-size: var(--font-classroom, clamp(21px, 1.38vw, 27px));
+  font-weight: 500;
+  line-height: 1.58;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 720ms ease-out, visibility 720ms ease-out;
+}
+
+.task4-story__summary-line--4 {
+  color: rgba(255, 226, 143, 0.98);
+  margin-top: clamp(0.35rem, 1vh, 0.75rem);
+}
+
+.task4-story__summary-line.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
 @keyframes task4-opening-note-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -757,6 +813,12 @@
   filter: url(#latitudeGlow) drop-shadow(0 0 7px rgba(255, 210, 92, 0.44));
 }
 
+.scene.task4-longitude-active .longitude-line-group.is-calibration-target .longitude-line {
+  stroke: rgba(255, 235, 157, 1);
+  stroke-width: 4.25;
+  filter: url(#longitudeGlow) drop-shadow(0 0 7px rgba(255, 210, 92, 0.44));
+}
+
 .task4-latitude-candidates {
   pointer-events: none;
 }
@@ -764,7 +826,7 @@
 .task4-latitude-candidate {
   opacity: 0;
   animation: task4-latitude-candidate-in 420ms ease-out forwards;
-  animation-delay: calc(var(--candidate-index) * 120ms);
+  animation-delay: calc(var(--candidate-index) * 600ms);
 }
 
 .task4-latitude-candidate__halo {
@@ -787,12 +849,15 @@
 
 /* The existing locator briefly signals an active north-position scan before
    its reference latitude is written into the same readout. */
-.device.is-task4-north-scanning .device-panel__signal {
+.device.is-task4-north-scanning .device-panel__signal,
+.device.is-task4-east-scanning .device-panel__signal {
   animation: task4-device-scan-signal 620ms ease-in-out infinite alternate;
 }
 
 .device.is-task4-north-scanning #deviceNorthValue,
-.device.is-task4-north-scanning #deviceSystemValue {
+.device.is-task4-north-scanning #deviceSystemValue,
+.device.is-task4-east-scanning #deviceEastValue,
+.device.is-task4-east-scanning #deviceSystemValue {
   animation: task4-device-scan-copy 760ms ease-in-out infinite alternate;
 }
 

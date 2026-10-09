@@ -129,6 +129,9 @@
       onStartNorthPositioning: () => {
         void startTask4NorthPositioning();
       },
+      onStartEastPositioning: () => {
+        void startTask4EastPositioning();
+      },
       onStartLocationTest: startTask4LocationTest,
     });
     task4Story.initialize();
@@ -143,6 +146,7 @@
 
   function destroyTask4WhenImplemented() {
     resetTask4LatitudeBranch();
+    resetTask4LongitudeBranch();
     task4Story?.destroy();
     task4Story = null;
     task4Flow?.destroy();
@@ -270,6 +274,20 @@
     answer: null,
     runToken: 0,
   };
+  const task4LongitudeState = {
+    phase: "idle",
+    answer: null,
+    runToken: 0,
+  };
+  const task4DirectionState = {
+    active: null,
+    north: { complete: false, reference: null, answer: null },
+    east: { complete: false, reference: null, answer: null },
+  };
+  const TASK4_DIRECTION_SCAN_DURATION = 4000;
+  const TASK4_LATITUDE_CANDIDATE_INTERVAL = 600;
+  const TASK4_LATITUDE_CANDIDATE_REVEAL_DURATION = 420;
+  const TASK4_LATITUDE_CANDIDATE_OBSERVE_DURATION = 500;
 
   const longitudeTeachingValues = [
     -180,
@@ -2267,6 +2285,7 @@
       candidateLayer.append(candidate);
     });
     latitudeTeachingLabels.append(candidateLayer);
+    return candidateLayer.childElementCount;
   }
 
   function resetTask4LatitudeBranch() {
@@ -2274,7 +2293,7 @@
     task4LatitudeState.phase = "idle";
     task4LatitudeState.answer = null;
     task4DeviceScanActive = false;
-    device.classList.remove("is-task4-north-scanning");
+    device.classList.remove("is-task4-north-scanning", "is-task4-east-scanning");
     deviceClose.disabled = false;
     const resolvePendingDeviceReview = task4DeviceCloseResolver;
     task4DeviceCloseResolver = null;
@@ -2324,12 +2343,13 @@
       task4DeviceCloseResolver = resolve;
     });
     setDeviceOpen(true);
-    await wait(2000);
+    await wait(TASK4_DIRECTION_SCAN_DURATION);
     if (token !== task4LatitudeState.runToken || task4LatitudeState.phase !== "NORTH_SCAN_ACTIVE") return;
     task4DeviceScanActive = false;
     device.classList.remove("is-task4-north-scanning");
     deviceClose.disabled = false;
     updateTask4NorthReferenceDevice();
+    task4DirectionState.north.reference = "20°N";
     await deviceClosed;
     if (token !== task4LatitudeState.runToken || task4LatitudeState.phase !== "NORTH_SCAN_ACTIVE") return;
     task4LatitudeState.phase = "NORTH_SCAN_COMPLETE";
@@ -2367,20 +2387,27 @@
     task4LatitudeState.phase = "SHOWING_CANDIDATES";
     task4LatitudeState.answer = answer;
     setTask4LatitudeActions();
-    showTask4LatitudeCandidates();
+    const candidateCount = showTask4LatitudeCandidates();
+    setLatitudeCopy({
+      prompt: "现在能确定珠海的具体位置了吗？",
+    });
+    const candidateRevealDuration = TASK4_LATITUDE_CANDIDATE_REVEAL_DURATION
+      + (Math.max(0, candidateCount - 1) * TASK4_LATITUDE_CANDIDATE_INTERVAL);
+    await wait(candidateRevealDuration + TASK4_LATITUDE_CANDIDATE_OBSERVE_DURATION);
+    if (token !== task4LatitudeState.runToken || task4LatitudeState.phase !== "SHOWING_CANDIDATES") return;
     setLatitudeCopy({
       prompt: "现在能确定珠海的具体位置了吗？",
       feedback: answer === "can"
         ? "这条线上有这么多可能位置，究竟是哪一个？"
         : "判断正确。沿着整条20°N纬线，仍然有许多可能位置。",
     });
-    await wait(1700);
-    if (token !== task4LatitudeState.runToken || task4LatitudeState.phase !== "SHOWING_CANDIDATES") return;
     setTask4LatitudeActions([{ label: "我看清楚了", action: "task4-show-limitation" }]);
   }
 
   function showTask4LatitudeLimitation() {
     task4LatitudeState.phase = "ONE_DIRECTION_LIMIT_FOUND";
+    task4DirectionState.north.complete = true;
+    task4DirectionState.north.answer = task4LatitudeState.answer;
     setLatitudeCopy({
       prompt: "只知道纬度，还不能确定一个地点的具体位置。",
       feedback: "20°N只缩小了南北范围，整条纬线仍然保留着多个可能位置。",
@@ -2399,6 +2426,219 @@
     clearTask4LatitudeCandidates();
     latitudeKicker.textContent = "任务二：修复南北定位";
     task4Story?.showEastDirectionPrompt();
+  }
+
+  function updateTask4EastScanInProgressDevice() {
+    deviceNetworkRow.hidden = false;
+    deviceNetworkValue.textContent = "经线、纬线";
+    deviceNorthValue.textContent = "已测试，具体位置未确认";
+    deviceEastValue.textContent = "东西定位扫描中…";
+    deviceSystemValue.textContent = "正在获取参考经度…";
+    deviceSystemRow.classList.add("device-readout__fault");
+    deviceSystemRow.classList.remove("device-readout__ready");
+    highlightDeviceUpdates(["north", "east", "system"]);
+  }
+
+  function updateTask4EastReferenceDevice() {
+    deviceNetworkRow.hidden = false;
+    deviceNetworkValue.textContent = "经线、纬线";
+    deviceNorthValue.textContent = "已测试，具体位置未确认";
+    deviceEastValue.textContent = "珠海附近的参考经度：120°E";
+    deviceSystemValue.textContent = "具体位置未确认";
+    deviceSystemRow.classList.add("device-readout__fault");
+    deviceSystemRow.classList.remove("device-readout__ready");
+    highlightDeviceUpdates(["north", "east", "system"]);
+  }
+
+  function setTask4LongitudeActions(actions = [], mode = "process") {
+    clearProcessActionContainer(longitudeActions);
+    longitudeActions.classList.remove("is-teaching-actions");
+    longitudeActions.classList.toggle("is-answer-actions", mode === "answer");
+    longitudeActions.classList.toggle("is-process-actions", mode === "process" && actions.length > 0);
+    actions.forEach(({ label, action }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.dataset.longitudeAction = action;
+      longitudeActions.append(button);
+    });
+  }
+
+  function clearTask4LongitudeCandidates() {
+    longitudeTeachingLabels.querySelector(".task4-longitude-candidates")?.remove();
+  }
+
+  function showTask4LongitudeCandidates() {
+    clearTask4LongitudeCandidates();
+    const candidateLayer = createSvgElement("g", {
+      class: "task4-longitude-candidates",
+      "aria-label": "120度东经线上的多个候选位置",
+    });
+    [-60, -40, -20, 0, 20, 40, 60].forEach((latitude, index) => {
+      const point = projectOrthographicPoint(
+        getLongitudeTeachingPoint(120, latitude),
+        longitudeTeachingModel,
+      );
+      const candidate = createSvgElement("g", {
+        class: "task4-longitude-candidate task4-latitude-candidate",
+        transform: `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)})`,
+        style: `--candidate-index: ${index}`,
+      });
+      candidate.append(
+        createSvgElement("circle", { class: "task4-latitude-candidate__halo", r: 13 }),
+        createSvgElement("circle", { class: "task4-latitude-candidate__core", r: 4.5 }),
+      );
+      candidateLayer.append(candidate);
+    });
+    longitudeTeachingLabels.append(candidateLayer);
+    return candidateLayer.childElementCount;
+  }
+
+  function resetTask4LongitudeBranch() {
+    task4LongitudeState.runToken += 1;
+    task4LongitudeState.phase = "idle";
+    task4LongitudeState.answer = null;
+    task4DirectionState.active = null;
+    task4DirectionState.north.complete = false;
+    task4DirectionState.north.reference = null;
+    task4DirectionState.north.answer = null;
+    task4DirectionState.east.complete = false;
+    task4DirectionState.east.reference = null;
+    task4DirectionState.east.answer = null;
+    task4DeviceScanActive = false;
+    device.classList.remove("is-task4-east-scanning");
+    deviceClose.disabled = false;
+    const resolvePendingDeviceReview = task4DeviceCloseResolver;
+    task4DeviceCloseResolver = null;
+    resolvePendingDeviceReview?.();
+    clearTask4LongitudeCandidates();
+    getLongitudeLineGroup(120)?.classList.remove("is-calibration-target", "is-error-flash");
+    if (scene.classList.contains("task4-longitude-active")) {
+      scene.classList.remove("longitude-active", "task4-longitude-active");
+      longitudeStage.setAttribute("aria-hidden", "true");
+      setLongitudeLineInteraction(false);
+      setTask4LongitudeActions();
+      setLongitudeCopy();
+    }
+    longitudeStage.classList.remove("is-task4-longitude-layout");
+    longitudeStage.querySelector(".longitude-stage__kicker").textContent = "任务三：修复东西定位";
+  }
+
+  function activateTask4LongitudePractice() {
+    task4LongitudeState.phase = "WAITING_FOR_120E";
+    task4DirectionState.active = "east";
+    task4Story?.hideForLongitudePractice();
+    prepareCompletedTaskOneWorld();
+    longitudeIntroStage.classList.remove("is-visible");
+    longitudeIntroStage.setAttribute("aria-hidden", "true");
+    longitudeStage.setAttribute("aria-hidden", "false");
+    longitudeStage.classList.add("is-task4-longitude-layout");
+    longitudeStage.querySelector(".longitude-stage__kicker").textContent = "任务四：寻找回家的坐标";
+    scene.classList.add("longitude-active", "task4-longitude-active");
+    setLongitudeStageMode();
+    buildLongitudeTeachingGlobe();
+    longitudeTeachingModel.rotation.y = getFrontFacingLongitudeRotation(-120, longitudeTeachingModel);
+    updateLongitudeTeachingGeometry();
+    resetLongitudeTeachingVisuals();
+    showCompleteLongitudeNotation("ew");
+    setLongitudeLineInteraction(true);
+    setTask4LongitudeActions();
+    setLongitudeCopy({ prompt: "请在球面上找到120°E经线。" });
+  }
+
+  async function startTask4EastPositioning() {
+    const token = ++task4LongitudeState.runToken;
+    task4LongitudeState.phase = "EAST_SCAN_ACTIVE";
+    task4DirectionState.active = "east";
+    task4LongitudeState.answer = null;
+    task4DeviceScanActive = true;
+    updateTask4EastScanInProgressDevice();
+    device.classList.add("is-found", "is-position-alert", "is-task4-east-scanning");
+    deviceClose.disabled = true;
+    const deviceClosed = new Promise((resolve) => {
+      task4DeviceCloseResolver = resolve;
+    });
+    setDeviceOpen(true);
+    await wait(TASK4_DIRECTION_SCAN_DURATION);
+    if (token !== task4LongitudeState.runToken || task4LongitudeState.phase !== "EAST_SCAN_ACTIVE") return;
+    task4DeviceScanActive = false;
+    device.classList.remove("is-task4-east-scanning");
+    deviceClose.disabled = false;
+    updateTask4EastReferenceDevice();
+    task4DirectionState.east.reference = "120°E";
+    await deviceClosed;
+    if (token !== task4LongitudeState.runToken || task4LongitudeState.phase !== "EAST_SCAN_ACTIVE") return;
+    task4LongitudeState.phase = "EAST_SCAN_COMPLETE";
+    activateTask4LongitudePractice();
+  }
+
+  function handleTask4LongitudeSelection(longitude) {
+    if (task4LongitudeState.phase !== "WAITING_FOR_120E") return false;
+    const normalized = canonicalLongitude(longitude);
+    if (normalized !== 120) {
+      flashLongitudeError(normalized);
+      const feedback = normalized <= 0
+        ? "120°E在本初子午线以东，再找找东经120度。"
+        : "方向对了，再看看度数：目标是120°E。";
+      setLongitudeCopy({ prompt: "请在球面上找到120°E经线。", feedback });
+      return true;
+    }
+    task4LongitudeState.phase = "FOUND_120E";
+    setLongitudeLineInteraction(false);
+    getLongitudeLineGroup(120)?.classList.add("is-calibration-target");
+    showLongitudeLabel("east", 120, "ew");
+    setLongitudeCopy({ prompt: "现在能确定珠海的具体位置了吗？" });
+    task4LongitudeState.phase = "WAITING_JUDGMENT";
+    setTask4LongitudeActions([
+      { label: "能", action: "task4-longitude-answer-can" },
+      { label: "不能", action: "task4-longitude-answer-cannot" },
+    ], "answer");
+    return true;
+  }
+
+  async function showTask4LongitudeEvidence(answer) {
+    const token = task4LongitudeState.runToken;
+    task4LongitudeState.phase = "SHOWING_CANDIDATES";
+    task4LongitudeState.answer = answer;
+    setTask4LongitudeActions();
+    const candidateCount = showTask4LongitudeCandidates();
+    setLongitudeCopy({ prompt: "现在能确定珠海的具体位置了吗？" });
+    const revealDuration = TASK4_LATITUDE_CANDIDATE_REVEAL_DURATION
+      + (Math.max(0, candidateCount - 1) * TASK4_LATITUDE_CANDIDATE_INTERVAL);
+    await wait(revealDuration + TASK4_LATITUDE_CANDIDATE_OBSERVE_DURATION);
+    if (token !== task4LongitudeState.runToken || task4LongitudeState.phase !== "SHOWING_CANDIDATES") return;
+    setLongitudeCopy({
+      prompt: "现在能确定珠海的具体位置了吗？",
+      feedback: answer === "can"
+        ? "这条经线上有多个可能位置，无法判断究竟是哪一个。"
+        : "目前只能确定东西方向的位置范围，仍不能确定唯一地点。",
+    });
+    setTask4LongitudeActions([{ label: "我看清楚了", action: "task4-longitude-show-limitation" }]);
+  }
+
+  function showTask4LongitudeLimitation() {
+    task4LongitudeState.phase = "ONE_DIRECTION_LIMIT_FOUND";
+    task4DirectionState.east.complete = true;
+    task4DirectionState.east.answer = task4LongitudeState.answer;
+    setLongitudeCopy({
+      prompt: "只知道经度，仍然无法确定一个地点的具体位置。",
+      feedback: "120°E只缩小了东西范围，整条经线仍然保留着多个可能位置。",
+    });
+    setTask4LongitudeActions([{ label: "继续调查", action: "task4-finish-longitude" }]);
+  }
+
+  function finishTask4LongitudeBranch() {
+    if (!task4DirectionState.north.complete || !task4DirectionState.east.complete) return;
+    task4LongitudeState.phase = "COMPLETE";
+    scene.classList.remove("longitude-active", "task4-longitude-active");
+    longitudeStage.setAttribute("aria-hidden", "true");
+    longitudeStage.classList.remove("is-task4-longitude-layout");
+    setLongitudeLineInteraction(false);
+    setTask4LongitudeActions();
+    setLongitudeCopy();
+    clearTask4LongitudeCandidates();
+    updateTask4EastReferenceDevice();
+    task4Story?.showDirectionSummary();
   }
 
   function resetLatitudeTaskState() {
@@ -4490,7 +4730,7 @@
     positionDeviceCloseResolver = null;
     task4DeviceCloseResolver = null;
     task4DeviceScanActive = false;
-    device.classList.remove("is-task4-north-scanning");
+    device.classList.remove("is-task4-north-scanning", "is-task4-east-scanning");
     deviceClose.disabled = false;
     completionDeviceReviewType = null;
     taskHasStarted = true;
@@ -5153,6 +5393,7 @@
   }
 
   function handleLongitudeLineSelection(longitude) {
+    if (handleTask4LongitudeSelection(longitude)) return;
     const normalized = canonicalLongitude(longitude);
     if (longitudeTaskState.phase === "zero-question") {
       if (longitudeTaskState.zeroAttemptValues.includes(normalized)) {
@@ -5285,6 +5526,25 @@
     const actionButton = event.target.closest("[data-longitude-action]");
     if (!actionButton) return;
     const action = actionButton.dataset.longitudeAction;
+
+    if (
+      (action === "task4-longitude-answer-can" || action === "task4-longitude-answer-cannot")
+      && task4LongitudeState.phase === "WAITING_JUDGMENT"
+    ) {
+      void showTask4LongitudeEvidence(action === "task4-longitude-answer-can" ? "can" : "cannot");
+      return;
+    }
+    if (
+      action === "task4-longitude-show-limitation"
+      && task4LongitudeState.phase === "SHOWING_CANDIDATES"
+    ) {
+      showTask4LongitudeLimitation();
+      return;
+    }
+    if (action === "task4-finish-longitude" && task4LongitudeState.phase === "ONE_DIRECTION_LIMIT_FOUND") {
+      finishTask4LongitudeBranch();
+      return;
+    }
 
     if (action === "reveal-prime" && longitudeTaskState.phase === "zero-conflict") {
       void revealPrimeMeridian();
