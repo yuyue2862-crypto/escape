@@ -332,8 +332,9 @@
 
 .task4-stage__target {
   margin-top: 0.7em;
+  min-height: calc(2 * 1.45em + 0.25em);
   color: #91d7ec;
-  font-size: clamp(18px, 1.35vw, 24px);
+  font-size: clamp(20px, 1.48vw, 26px);
 }
 
 .task4-stage__target p {
@@ -346,6 +347,10 @@
 
 .task4-stage__target p + p {
   margin-top: 0.25em;
+}
+
+.task4-stage__target.is-pending p {
+  visibility: hidden;
 }
 
 .task4-stage__target.is-typing::after {
@@ -808,6 +813,13 @@
   margin: clamp(0.85rem, 2vh, 1.25rem) auto 0;
 }
 
+/* Only the S4-03A record-review action receives the requested larger type. */
+.task4-story[data-story-state="S4_03A_RECORDS_READY"] .task4-story__action {
+  min-width: clamp(12.8rem, 16vw, 15rem);
+  padding: 0.7em 1.78em;
+  font-size: clamp(20px, 1.45vw, 26px);
+}
+
 .task4-story__summary-line {
   margin: 0;
   color: rgba(225, 220, 202, 0.9);
@@ -1182,6 +1194,18 @@
   white-space: normal;
 }
 
+.longitude-stage.is-task4-uniqueness-answers .longitude-stage__actions button.is-task4-answer-entering {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-0.45rem);
+  transition: opacity 420ms ease-out, transform 420ms ease-out;
+}
+
+.longitude-stage.is-task4-uniqueness-answers .longitude-stage__actions button.is-task4-answer-entering.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 @media (max-width: 1100px), (max-height: 720px) {
   .longitude-stage.is-task4-uniqueness-answers .longitude-stage__actions {
     width: clamp(12rem, 18vw, 16rem);
@@ -1240,6 +1264,124 @@
   stroke: #fff0a3;
   stroke-width: 5;
   filter: drop-shadow(0 0 7px rgba(255, 225, 127, 0.78));
+}
+
+.task4-grid-network {
+  pointer-events: none;
+}
+
+.task4-grid-line {
+  fill: none;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  clip-path: url(#longitudeSphereClip);
+}
+
+.task4-grid-line--latitude {
+  stroke: rgba(126, 216, 234, 0.48);
+  stroke-width: 1.45;
+}
+
+.task4-grid-line--longitude {
+  stroke: rgba(231, 192, 82, 0.44);
+  stroke-width: 1.35;
+}
+
+.longitude-stage.is-task4-grid-mode .is-task4-grid-reveal {
+  opacity: 0;
+}
+
+.longitude-stage.is-task4-grid-animating .is-task4-grid-reveal {
+  animation: task4-grid-line-reveal 760ms ease-out var(--task4-grid-delay, 0ms) forwards;
+}
+
+.longitude-stage.is-task4-grid-generated .is-task4-grid-reveal {
+  opacity: 1;
+}
+
+.longitude-stage.is-task4-grid-mode .longitude-label:not([data-longitude="120"]) {
+  opacity: 0 !important;
+}
+
+.longitude-stage.is-task4-grid-mode .task4-dual-latitude-label:not([data-latitude="20"]) {
+  visibility: hidden !important;
+}
+
+@keyframes task4-grid-line-reveal {
+  0% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0 rgba(174, 226, 229, 0));
+  }
+
+  58% {
+    opacity: 0.78;
+    filter: drop-shadow(0 0 5px rgba(174, 226, 229, 0.28));
+  }
+
+  100% {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+.longitude-stage.is-task4-grid-action-visible .longitude-stage__actions {
+  z-index: 7;
+  top: calc(50% + var(--active-teaching-globe-radius) + clamp(0.65rem, 1.4vh, 1rem));
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  transform: translateX(-50%);
+}
+
+.longitude-stage.is-task4-grid-action-visible .longitude-stage__actions.is-task4-dual-actions {
+  flex-direction: row;
+}
+
+.longitude-stage.is-task4-grid-action-visible .longitude-stage__actions button {
+  min-width: clamp(11rem, 16vw, 15rem);
+  min-height: clamp(3rem, 5.4vh, 3.6rem);
+  padding: clamp(0.58rem, 1vh, 0.75rem) clamp(1.1rem, 1.7vw, 1.5rem);
+  font-size: clamp(19px, 1.3vw, 24px);
+  white-space: nowrap;
+}
+
+.longitude-stage.is-task4-dual-layout .longitude-stage__prompt {
+  transition: opacity 620ms ease, transform 620ms ease, color 620ms ease;
+}
+
+.longitude-stage.is-task4-dual-layout .longitude-stage__prompt.is-task4-copy-leaving {
+  opacity: 0;
+  transform: translateY(-0.4rem);
+}
+
+.longitude-stage.is-task4-dual-layout .longitude-stage__prompt.is-task4-grid-concept {
+  color: #fff0a3;
+  font-size: clamp(34px, 2.6vw, 50px);
+  font-weight: 750;
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 18px rgba(255, 221, 110, 0.28), 0 3px 24px rgba(0, 0, 0, 0.95);
+}
+
+.scene.task4-story-active.longitude-active.task4-grid-knowledge-visible .scan-records {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+}
+
+.scene.task4-story-active.longitude-active.task4-grid-knowledge-visible .task-reminder {
+  opacity: 0;
+  visibility: visible;
+  pointer-events: none;
+}
+
+.scene.task4-story-active.longitude-active.task4-grid-knowledge-visible .task-reminder.is-visible {
+  opacity: 1;
+}
+
+.task4-grid-record {
+  max-width: min(31rem, 40vw);
 }
 
 .task4-dual-latitude-group.is-error-flash .task4-dual-latitude-line,

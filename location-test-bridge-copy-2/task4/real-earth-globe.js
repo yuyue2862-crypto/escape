@@ -112,6 +112,8 @@
     let markerLayer = null;
     let selectedCoordinate = null;
     let drag = null;
+    let pinch = null;
+    const touchPointers = new Map();
     let previousSize = "";
 
     const assertActive = () => {
@@ -513,18 +515,30 @@
       setScale(scale * Math.exp(-delta * 0.001));
     }
 
-    function stopDrag() {
+    function stopDrag({ releaseCapture = true } = {}) {
       if (!drag) return;
       const pointerId = drag.pointerId;
       drag = null;
       svg.classList.remove("is-pointer-down");
       svg.classList.remove("is-dragging");
-      if (svg.hasPointerCapture?.(pointerId)) svg.releasePointerCapture(pointerId);
+      if (releaseCapture && svg.hasPointerCapture?.(pointerId)) svg.releasePointerCapture(pointerId);
     }
 
-    function pointerDown(event) {
-      if (drag || !event.isPrimary || event.button !== 0 || !["rotate", "select", "interactive"].includes(mode)) return;
-      if (!getCoordinateAt(event.clientX, event.clientY)) return;
+    function stopPinch() {
+      pinch = null;
+      svg?.classList.remove("is-pinching");
+    }
+
+    function releaseTouchPointer(pointerId) {
+      touchPointers.delete(pointerId);
+      if (svg?.hasPointerCapture?.(pointerId)) svg.releasePointerCapture(pointerId);
+    }
+
+    function getTouchDistance(first, second) {
+      return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+    }
+
+    function beginSinglePointerDrag(event) {
       drag = {
         pointerId: event.pointerId,
         startClientX: event.clientX,
@@ -534,11 +548,62 @@
         moved: false,
       };
       svg.classList.add("is-pointer-down");
+    }
+
+    function beginPinch() {
+      const [first, second] = [...touchPointers.values()];
+      if (!first || !second) return;
+      stopDrag({ releaseCapture: false });
+      pinch = {
+        pointerIds: [first.pointerId, second.pointerId],
+        startDistance: Math.max(1, getTouchDistance(first, second)),
+        startScale: scale,
+      };
+      svg.classList.add("is-pinching");
+    }
+
+    function pointerDown(event) {
+      if (!["rotate", "select", "interactive"].includes(mode)) return;
+      if (!getCoordinateAt(event.clientX, event.clientY)) return;
+
+      if (event.pointerType === "touch") {
+        if (touchPointers.has(event.pointerId) || touchPointers.size >= 2) return;
+        touchPointers.set(event.pointerId, {
+          pointerId: event.pointerId,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        });
+        svg.setPointerCapture(event.pointerId);
+        if (touchPointers.size === 1) beginSinglePointerDrag(event);
+        else beginPinch();
+        event.preventDefault();
+        return;
+      }
+
+      if (drag || pinch || !event.isPrimary || event.button !== 0) return;
+      beginSinglePointerDrag(event);
       svg.setPointerCapture(event.pointerId);
       event.preventDefault();
     }
 
     function pointerMove(event) {
+      if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+        touchPointers.set(event.pointerId, {
+          pointerId: event.pointerId,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        });
+        if (pinch) {
+          const first = touchPointers.get(pinch.pointerIds[0]);
+          const second = touchPointers.get(pinch.pointerIds[1]);
+          if (first && second) {
+            setScale(pinch.startScale * getTouchDistance(first, second) / pinch.startDistance);
+          }
+          event.preventDefault();
+          return;
+        }
+      }
+
       if (!drag || drag.pointerId !== event.pointerId) return;
       if (Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY) > config.dragThreshold) drag.moved = true;
       if (drag.moved && (mode === "rotate" || mode === "interactive")) {
@@ -555,6 +620,23 @@
     }
 
     function pointerUp(event) {
+      if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+        const wasPinching = Boolean(pinch);
+        touchPointers.delete(event.pointerId);
+        if (wasPinching) {
+          if (svg.hasPointerCapture?.(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+          stopPinch();
+          stopDrag({ releaseCapture: false });
+          event.preventDefault();
+          return;
+        }
+        if (!drag || drag.pointerId !== event.pointerId) {
+          if (svg.hasPointerCapture?.(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+          event.preventDefault();
+          return;
+        }
+      }
+
       if (!drag || drag.pointerId !== event.pointerId) return;
       const wasClick = !drag.moved && Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY) <= config.dragThreshold;
       stopDrag();
@@ -565,6 +647,10 @@
     }
 
     function pointerCancel(event) {
+      if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+        releaseTouchPointer(event.pointerId);
+        stopPinch();
+      }
       if (drag?.pointerId === event.pointerId) stopDrag();
     }
     const listeners = { pointerdown: pointerDown, pointermove: pointerMove, pointerup: pointerUp, pointercancel: pointerCancel, lostpointercapture: pointerCancel };
@@ -633,6 +719,8 @@
       destroy() {
         if (destroyed) return;
         stopDrag();
+        stopPinch();
+        [...touchPointers.keys()].forEach(releaseTouchPointer);
         if (svg) Object.entries(listeners).forEach(([name, handler]) => svg.removeEventListener(name, handler));
         svg?.removeEventListener("wheel", wheelZoom);
         if (svg) {
@@ -657,6 +745,8 @@
         assertActive();
         if (!VALID_MODES.has(nextMode)) throw new Error(`Unsupported task four globe mode: ${nextMode}`);
         stopDrag();
+        stopPinch();
+        [...touchPointers.keys()].forEach(releaseTouchPointer);
         mode = nextMode;
         svg?.setAttribute("data-mode", mode);
       },

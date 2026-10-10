@@ -8,6 +8,8 @@
   ]);
   const TARGET_TYPING_INTERVAL = 30;
   const TARGET_LINE_DELAY = 90;
+  const TARGET_REVEAL_DELAY = 2000;
+  const TARGET_TYPING_SOUND_PEAK = 0.028;
   const NEXT_TASK_DELAY = 1400;
   const radians = (angle) => angle * Math.PI / 180;
 
@@ -39,6 +41,7 @@
     let currentTaskIndex = 0;
     let nextTaskTimer = null;
     let typingTimer = null;
+    let targetRevealTimer = null;
     let typingToken = 0;
     let typingAudioContext = null;
 
@@ -84,8 +87,11 @@
     const stopTargetTyping = () => {
       typingToken += 1;
       if (typingTimer !== null) window.clearTimeout(typingTimer);
+      if (targetRevealTimer !== null) window.clearTimeout(targetRevealTimer);
       typingTimer = null;
+      targetRevealTimer = null;
       targetNode?.classList.remove("is-typing");
+      targetNode?.classList.remove("is-pending");
     };
 
     const getTypingAudioContext = () => {
@@ -96,9 +102,18 @@
       return typingAudioContext;
     };
 
+    const prepareTargetTypingAudio = () => {
+      if (stage?.ownerDocument.querySelector("#soundToggle")?.getAttribute("aria-pressed") === "true") return null;
+      const context = getTypingAudioContext();
+      if (context?.state === "suspended") {
+        context.resume().catch(() => {});
+      }
+      return context;
+    };
+
     const playTargetTypingTick = (characterIndex) => {
       if (characterIndex % 2 !== 0 || stage?.ownerDocument.querySelector("#soundToggle")?.getAttribute("aria-pressed") === "true") return;
-      const context = getTypingAudioContext();
+      const context = prepareTargetTypingAudio();
       if (!context || context.state !== "running") return;
       const now = context.currentTime;
       const oscillator = context.createOscillator();
@@ -107,16 +122,17 @@
       oscillator.frequency.setValueAtTime(520, now);
       oscillator.frequency.exponentialRampToValueAtTime(430, now + 0.035);
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.006);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+      gain.gain.exponentialRampToValueAtTime(TARGET_TYPING_SOUND_PEAK, now + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
       oscillator.connect(gain);
       gain.connect(context.destination);
       oscillator.start(now);
-      oscillator.stop(now + 0.045);
+      oscillator.stop(now + 0.06);
     };
 
     const startTargetTyping = () => {
       if (!targetNode) return;
+      prepareTargetTypingAudio();
       stopTargetTyping();
       const token = ++typingToken;
       let characterIndex = 0;
@@ -133,7 +149,6 @@
         targetNode.append(node);
         return { node, text };
       });
-      targetNode.classList.add("is-typing");
 
       const writeNextCharacter = () => {
         if (destroyed || token !== typingToken) return;
@@ -156,7 +171,14 @@
         targetNode.classList.remove("is-typing");
       };
 
-      writeNextCharacter();
+      targetNode.classList.add("is-pending");
+      targetRevealTimer = window.setTimeout(() => {
+        targetRevealTimer = null;
+        if (destroyed || token !== typingToken) return;
+        targetNode.classList.remove("is-pending");
+        targetNode.classList.add("is-typing");
+        writeNextCharacter();
+      }, TARGET_REVEAL_DELAY);
     };
 
     const setFeedback = (lines = [], { success = false } = {}) => {

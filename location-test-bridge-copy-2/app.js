@@ -321,12 +321,22 @@
     LON: "T4-LON",
     CHOICE: "T4-CHOICE",
     GRID: "T4-GRID",
+    REAL_TEST: "T4-REAL-TEST",
   });
   const TASK4_DIRECTION_SCAN_DURATION = 4000;
   const TASK4_LATITUDE_CANDIDATE_INTERVAL = 600;
   const TASK4_LATITUDE_CANDIDATE_REVEAL_DURATION = 420;
   const TASK4_LATITUDE_CANDIDATE_OBSERVE_DURATION = 500;
   const TASK4_PRACTICE_EXIT_DURATION = 850;
+  const TASK4_GRID_REVEAL_DURATION = 5200;
+  const TASK4_GRID_LINE_DELAY = 340;
+  const TASK4_GRID_RECORD_INTERVAL = 70;
+  const TASK4_GRID_CONCLUSION_HOLD_DURATION = 1400;
+  const TASK4_GRID_CONCEPT_TRANSITION_DURATION = 720;
+  const TASK4_GRID_CONCLUSION_FADE_DURATION = 1700;
+  const TASK4_UNIQUENESS_ANSWER_DELAY = 1000;
+  const TASK4_UNIQUENESS_ANSWER_INTERVAL = 260;
+  const TASK4_UNIQUENESS_ANSWER_FADE_DURATION = 420;
 
   const longitudeTeachingValues = [
     -180,
@@ -554,8 +564,16 @@
       ? task4State.node
       : emptyState.task4.node;
     if (completedTask4Directions.length === 2) {
-      normalizedTask4Node = TASK4_PROGRESS_NODE.GRID;
-    } else if (normalizedTask4Node === TASK4_PROGRESS_NODE.GRID) {
+      if (
+        normalizedTask4Node !== TASK4_PROGRESS_NODE.GRID
+        && normalizedTask4Node !== TASK4_PROGRESS_NODE.REAL_TEST
+      ) {
+        normalizedTask4Node = TASK4_PROGRESS_NODE.GRID;
+      }
+    } else if (
+      normalizedTask4Node === TASK4_PROGRESS_NODE.GRID
+      || normalizedTask4Node === TASK4_PROGRESS_NODE.REAL_TEST
+    ) {
       normalizedTask4Node = completedTask4Directions.length ? TASK4_PROGRESS_NODE.CHOICE : TASK4_PROGRESS_NODE.START;
     } else if (normalizedTask4Node === TASK4_PROGRESS_NODE.CHOICE && !completedTask4Directions.length) {
       normalizedTask4Node = TASK4_PROGRESS_NODE.START;
@@ -717,7 +735,10 @@
           },
           directionOrder: task4DirectionOrder,
           awaitingDirectionChoice: normalizedTask4Node === TASK4_PROGRESS_NODE.CHOICE,
-          intersectionExplorationStarted: normalizedTask4Node === TASK4_PROGRESS_NODE.GRID
+          intersectionExplorationStarted: (
+            normalizedTask4Node === TASK4_PROGRESS_NODE.GRID
+            || normalizedTask4Node === TASK4_PROGRESS_NODE.REAL_TEST
+          )
             && Boolean(task4State.intersectionExplorationStarted),
         },
       },
@@ -2340,6 +2361,7 @@
   function getTask4ProgressNode() {
     const northComplete = task4DirectionState.north.status === "complete";
     const eastComplete = task4DirectionState.east.status === "complete";
+    if (task4DualLineState.phase === "S4C_REAL_TEST_ACTIVE") return TASK4_PROGRESS_NODE.REAL_TEST;
     if (northComplete && eastComplete) return TASK4_PROGRESS_NODE.GRID;
     if (task4DirectionState.active === "north") return TASK4_PROGRESS_NODE.LAT;
     if (task4DirectionState.active === "east") return TASK4_PROGRESS_NODE.LON;
@@ -2362,7 +2384,9 @@
       },
       directionOrder: [...task4DirectionState.order],
       awaitingDirectionChoice: node === TASK4_PROGRESS_NODE.CHOICE,
-      intersectionExplorationStarted: node === TASK4_PROGRESS_NODE.GRID
+      intersectionExplorationStarted: (
+        node === TASK4_PROGRESS_NODE.GRID || node === TASK4_PROGRESS_NODE.REAL_TEST
+      )
         && task4DualLineState.phase !== "idle",
     };
   }
@@ -2405,6 +2429,8 @@
         return "等待选择另一定位方向";
       case TASK4_PROGRESS_NODE.GRID:
         return "双线定位·探索经纬网";
+      case TASK4_PROGRESS_NODE.REAL_TEST:
+        return "真实定位测试·北京与里约热内卢";
       default:
         return "任务四开场";
     }
@@ -2711,13 +2737,20 @@
   }
 
   function clearTask4DualLineLayer() {
+    longitudeTeachingLines.querySelector(".task4-grid-network")?.remove();
     longitudeTeachingLines.querySelector(".task4-dual-latitudes")?.remove();
     longitudeTeachingLabels.querySelector(".task4-dual-intersection-marker")?.remove();
     longitudeTeachingLabels.querySelector(".task4-dual-candidate-marker")?.remove();
     longitudeTeachingLabels.querySelector(".task4-dual-latitude-labels")?.remove();
+    longitudeTeachingLines.querySelectorAll(".is-task4-grid-reveal").forEach((group) => {
+      group.classList.remove("is-task4-grid-reveal");
+      group.style.removeProperty("--task4-grid-delay");
+    });
   }
 
   function resetTask4DualLinePractice() {
+    const hadTask4GridKnowledge = scene.classList.contains("task4-grid-knowledge-visible")
+      || Boolean(scanRecords.querySelector(".task4-grid-record"));
     task4DualLineState.runToken += 1;
     task4DualLineState.phase = "idle";
     task4DualLineState.firstDirection = null;
@@ -2736,8 +2769,100 @@
       "is-task4-uniqueness",
       "is-task4-uniqueness-choice",
       "is-task4-uniqueness-answers",
+      "is-task4-grid-mode",
+      "is-task4-grid-animating",
+      "is-task4-grid-generated",
+      "is-task4-grid-action-visible",
     );
-    scene.classList.remove("task4-dual-active");
+    longitudePrompt.classList.remove("is-task4-copy-leaving", "is-task4-grid-concept");
+    scene.classList.remove("task4-dual-active", "task4-grid-knowledge-visible");
+    if (hadTask4GridKnowledge) {
+      scanRecords.replaceChildren();
+      scanRecords.classList.remove("is-final-summary");
+      scanRecords.setAttribute("aria-hidden", "true");
+      taskReminder.textContent = "";
+      taskReminder.classList.remove("is-visible");
+      taskReminder.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function getTask4GridLongitudeDistance(longitude) {
+    return Math.round(Math.abs(canonicalLongitude(longitude - 120)) / 15);
+  }
+
+  function setTask4GridReveal(group, distance) {
+    group.classList.add("is-task4-grid-reveal");
+    group.style.setProperty("--task4-grid-delay", `${distance * TASK4_GRID_LINE_DELAY}ms`);
+  }
+
+  function buildTask4GridNetwork() {
+    longitudeTeachingLines.querySelector(".task4-grid-network")?.remove();
+    const layer = createSvgElement("g", {
+      class: "task4-grid-network",
+      "aria-hidden": "true",
+    });
+    const latitudeValues = Array.from({ length: 17 }, (_, index) => -80 + index * 10);
+    const longitudeValues = Array.from({ length: 24 }, (_, index) => -180 + index * 15);
+
+    latitudeValues.forEach((latitude) => {
+      const existing = longitudeTeachingLines.querySelector(
+        `.task4-dual-latitude-group[data-latitude="${latitude}"]`,
+      );
+      if (latitude === 20) return;
+      if (existing) {
+        setTask4GridReveal(existing, Math.abs(latitude - 20) / 10);
+        return;
+      }
+      const group = createSvgElement("g", {
+        class: "task4-grid-line-group task4-grid-line-group--latitude",
+        "data-latitude": latitude,
+      });
+      group.append(createSvgElement("path", { class: "task4-grid-line task4-grid-line--latitude" }));
+      setTask4GridReveal(group, Math.abs(latitude - 20) / 10);
+      layer.append(group);
+    });
+
+    longitudeValues.forEach((longitude) => {
+      const existing = getLongitudeLineGroup(longitude);
+      if (longitude === 120) return;
+      if (existing) {
+        setTask4GridReveal(existing, getTask4GridLongitudeDistance(longitude));
+        return;
+      }
+      const group = createSvgElement("g", {
+        class: "task4-grid-line-group task4-grid-line-group--longitude",
+        "data-longitude": longitude,
+      });
+      group.append(createSvgElement("path", { class: "task4-grid-line task4-grid-line--longitude" }));
+      setTask4GridReveal(group, getTask4GridLongitudeDistance(longitude));
+      layer.append(group);
+    });
+
+    longitudeTeachingLines.prepend(layer);
+    updateTask4GridGeometry();
+  }
+
+  function updateTask4GridGeometry() {
+    longitudeTeachingLines.querySelectorAll(".task4-grid-line-group--latitude").forEach((group) => {
+      const latitude = Number(group.dataset.latitude);
+      const pathData = createFrontSurfacePathData(
+        (longitude) => getLatitudePoint(latitude, -longitude, longitudeTeachingModel.radius),
+        -180,
+        180,
+        180,
+      );
+      group.querySelector("path")?.setAttribute("d", pathData);
+    });
+    longitudeTeachingLines.querySelectorAll(".task4-grid-line-group--longitude").forEach((group) => {
+      const longitude = Number(group.dataset.longitude);
+      const pathData = createFrontSurfacePathData(
+        (latitude) => getLongitudeTeachingPoint(longitude, latitude),
+        -90,
+        90,
+        180,
+      );
+      group.querySelector("path")?.setAttribute("d", pathData);
+    });
   }
 
   function updateTask4DualLineGeometry() {
@@ -2867,17 +2992,22 @@
     );
   }
 
+  function appendTask4DualAction({ label, action, disabled = false, className = "" }) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.dataset.longitudeAction = action;
+    button.disabled = disabled;
+    if (className) button.className = className;
+    longitudeActions.append(button);
+    return button;
+  }
+
   function setTask4DualActions(actions = []) {
     clearProcessActionContainer(longitudeActions);
     longitudeActions.classList.remove("is-answer-actions", "is-teaching-actions");
     longitudeActions.classList.toggle("is-task4-dual-actions", actions.length > 0);
-    actions.forEach(({ label, action }) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = label;
-      button.dataset.longitudeAction = action;
-      longitudeActions.append(button);
-    });
+    actions.forEach((action) => appendTask4DualAction(action));
   }
 
   function showTask4DualCopy({ status = "", instruction = "", feedback = "" } = {}) {
@@ -2986,15 +3116,19 @@
     return true;
   }
 
-  function handleTask4DualIntersectionClick(event) {
-    if (task4DualLineState.phase !== "WAITING_FOR_INTERSECTION") return false;
+  function isTask4TargetIntersectionClick(event, tolerance = 22) {
     const rect = longitudeGlobe.getBoundingClientRect();
     const viewBox = longitudeGlobe.viewBox.baseVal;
     const x = viewBox.x + ((event.clientX - rect.left) / rect.width) * viewBox.width;
     const y = viewBox.y + ((event.clientY - rect.top) / rect.height) * viewBox.height;
     const point = projectOrthographicPoint(getLongitudeTeachingPoint(120, 20), longitudeTeachingModel);
     const isVisible = point.depth <= LONGITUDE_FRONT_DEPTH_TOLERANCE;
-    if (isVisible && Math.hypot(x - point.x, y - point.y) <= 22) {
+    return isVisible && Math.hypot(x - point.x, y - point.y) <= tolerance;
+  }
+
+  function handleTask4DualIntersectionClick(event) {
+    if (task4DualLineState.phase !== "WAITING_FOR_INTERSECTION") return false;
+    if (isTask4TargetIntersectionClick(event)) {
       task4DualLineState.phase = "INTERSECTION_FOUND";
       task4DualLineState.intersectionFound = true;
       longitudeTeachingLabels.querySelector(".task4-dual-intersection-marker")?.classList.add("is-visible");
@@ -3009,6 +3143,20 @@
       feedback: "这里不是交点，请继续观察。",
     });
     return false;
+  }
+
+  function handleTask4GridTriggerClick(event) {
+    if (task4DualLineState.phase !== "S4C_WAITING_INTERSECTION") return false;
+    if (!isTask4TargetIntersectionClick(event)) {
+      showTask4DualCopy({
+        status: "两条定位线共同确定了唯一位置。",
+        instruction: "请再次点击20°N纬线\n与120°E经线的交点\n继续探索。",
+        feedback: "请点击已经标记的交点。",
+      });
+      return true;
+    }
+    void beginTask4GridReveal();
+    return true;
   }
 
   function beginTask4UniquenessObservation() {
@@ -3110,9 +3258,47 @@
     updateTask4DualLineGeometry();
   }
 
+  async function revealTask4UniquenessAnswers(token) {
+    const answers = [
+      { label: "A. 因为这次找到了两条线共同经过的唯一位置。", action: "task4-uniqueness-answer-a" },
+      { label: "B. 因为20°N纬线比其他纬线更准确。", action: "task4-uniqueness-answer-b" },
+      { label: "C. 因为120°E经线比其他经线更准确。", action: "task4-uniqueness-answer-c" },
+    ];
+
+    await wait(TASK4_UNIQUENESS_ANSWER_DELAY);
+    if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "UNIQUE_REASONING") return;
+
+    longitudeActions.classList.add("is-task4-dual-actions");
+    for (const answer of answers) {
+      const button = appendTask4DualAction({
+        ...answer,
+        disabled: true,
+        className: "is-task4-answer-entering",
+      });
+      window.requestAnimationFrame(() => {
+        if (
+          token !== task4DualLineState.runToken
+          || task4DualLineState.phase !== "UNIQUE_REASONING"
+          || !button.isConnected
+        ) return;
+        button.classList.add("is-visible");
+      });
+      await wait(TASK4_UNIQUENESS_ANSWER_INTERVAL);
+      if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "UNIQUE_REASONING") return;
+    }
+
+    await wait(TASK4_UNIQUENESS_ANSWER_FADE_DURATION);
+    if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "UNIQUE_REASONING") return;
+    longitudeActions.querySelectorAll(".is-task4-answer-entering").forEach((button) => {
+      button.disabled = false;
+      button.classList.remove("is-task4-answer-entering");
+    });
+  }
+
   function showTask4UniquenessReasoning() {
     if (!task4DualLineState.intersectionFound) return;
     resetTask4SecondCandidate();
+    const token = task4DualLineState.runToken;
     task4DualLineState.phase = "UNIQUE_REASONING";
     longitudeStage.classList.remove("is-task4-uniqueness-choice");
     longitudeStage.classList.add("is-task4-uniqueness-answers");
@@ -3120,11 +3306,8 @@
       status: "已确认没有第二个共同位置。",
       instruction: "之前只用一条纬线或一条经线，\n都无法确定具体位置。\n为什么这一次可以？",
     });
-    setTask4DualActions([
-      { label: "A. 因为这次找到了两条线共同经过的唯一位置。", action: "task4-uniqueness-answer-a" },
-      { label: "B. 因为20°N纬线比其他纬线更准确。", action: "task4-uniqueness-answer-b" },
-      { label: "C. 因为120°E经线比其他经线更准确。", action: "task4-uniqueness-answer-c" },
-    ]);
+    setTask4DualActions();
+    void revealTask4UniquenessAnswers(token);
   }
 
   function answerTask4UniquenessQuestion(answer) {
@@ -3141,10 +3324,127 @@
     longitudeStage.classList.remove("is-task4-uniqueness-choice");
     longitudeStage.classList.remove("is-task4-uniqueness-answers");
     setTask4DualActions();
+    task4Stage.dataset.nextStage = "s4-03c";
     showTask4DualCopy({
       status: "两条定位线共同确定了唯一位置。",
       instruction: "一条纬线和一条经线相交，\n可以确定一个具体位置。",
     });
+    void prepareTask4GridTrigger();
+  }
+
+  async function prepareTask4GridTrigger() {
+    const token = task4DualLineState.runToken;
+    await wait(TASK4_GRID_CONCLUSION_HOLD_DURATION);
+    if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "UNIQUE_CONCLUSION") return;
+    task4DualLineState.phase = "S4C_WAITING_INTERSECTION";
+    showTask4DualCopy({
+      status: "两条定位线共同确定了唯一位置。",
+      instruction: "请再次点击20°N纬线\n与120°E经线的交点\n继续探索。",
+    });
+  }
+
+  async function beginTask4GridReveal() {
+    if (task4DualLineState.phase !== "S4C_WAITING_INTERSECTION") return;
+    const token = task4DualLineState.runToken;
+    task4DualLineState.phase = "S4C_GRID_ANIMATING";
+    longitudeStage.classList.remove(
+      "is-draggable",
+      "is-task4-uniqueness",
+      "is-task4-uniqueness-choice",
+      "is-task4-uniqueness-answers",
+      "is-task4-grid-action-visible",
+    );
+    longitudeStage.classList.add("is-task4-grid-mode");
+    setTask4DualLineSelection();
+    setTask4DualActions();
+    showTask4DualCopy({
+      status: "两条定位线共同确定了唯一位置。",
+    });
+    buildTask4GridNetwork();
+    await wait(40);
+    if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "S4C_GRID_ANIMATING") return;
+    longitudeStage.classList.add("is-task4-grid-animating");
+    await wait(TASK4_GRID_REVEAL_DURATION);
+    if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "S4C_GRID_ANIMATING") return;
+    longitudeStage.classList.add("is-task4-grid-generated");
+    longitudeStage.classList.remove("is-task4-grid-animating");
+    longitudeStage.classList.add("is-draggable", "is-task4-grid-action-visible");
+    task4DualLineState.phase = "S4C_WAITING_DISCOVERY";
+    setTask4DualActions([{ label: "查看新发现", action: "task4-grid-view-discovery" }]);
+  }
+
+  async function revealTask4GridKnowledge() {
+    if (task4DualLineState.phase !== "S4C_WAITING_DISCOVERY") return;
+    const token = task4DualLineState.runToken;
+    task4DualLineState.phase = "S4C_CONCEPT_REVEALING";
+    longitudeStage.classList.remove("is-task4-grid-action-visible");
+    setTask4DualActions();
+    longitudePrompt.classList.add("is-task4-copy-leaving");
+    await wait(TASK4_GRID_CONCEPT_TRANSITION_DURATION);
+    if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "S4C_CONCEPT_REVEALING") return;
+    showTask4DualCopy({ status: "经纬网" });
+    longitudePrompt.classList.add("is-task4-grid-concept");
+    longitudePrompt.classList.remove("is-task4-copy-leaving");
+    await wait(900);
+    if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "S4C_CONCEPT_REVEALING") return;
+
+    task4DualLineState.phase = "S4C_RECORD_TYPING";
+    scanRecords.replaceChildren();
+    scanRecords.classList.remove("is-final-summary");
+    scanRecords.setAttribute("aria-hidden", "false");
+    taskReminder.textContent = "";
+    taskReminder.classList.remove("is-visible");
+    taskReminder.setAttribute("aria-hidden", "false");
+    scene.classList.add("task4-grid-knowledge-visible");
+
+    const record = document.createElement("p");
+    const result = document.createElement("span");
+    record.className = "scan-record is-writing task4-grid-record";
+    result.className = "scan-record__result";
+    record.append(result);
+    scanRecords.append(record);
+    const recordText = "经线和纬线相互交织，形成了经纬网";
+    for (const [characterIndex, character] of Array.from(recordText).entries()) {
+      if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "S4C_RECORD_TYPING") return;
+      result.textContent += character;
+      playRecordTick(characterIndex);
+      await wait(TASK4_GRID_RECORD_INTERVAL);
+    }
+    record.classList.remove("is-writing");
+    record.classList.add("is-complete");
+    await wait(1000);
+    if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "S4C_RECORD_TYPING") return;
+
+    task4DualLineState.phase = "S4C_CONCLUSION_REVEALING";
+    taskReminder.textContent = "发现了用作定位的经纬网";
+    taskReminder.classList.add("is-visible");
+    await wait(TASK4_GRID_CONCLUSION_FADE_DURATION);
+    if (token !== task4DualLineState.runToken || task4DualLineState.phase !== "S4C_CONCLUSION_REVEALING") return;
+
+    task4DualLineState.phase = "S4C_WAITING_REAL_TEST";
+    saveTask4Progress(TASK4_PROGRESS_NODE.GRID);
+    longitudeStage.classList.add("is-task4-grid-action-visible");
+    setTask4DualActions([{ label: "开始真实的定位测试", action: "task4-grid-start-real-test" }]);
+  }
+
+  function enterTask4RealLocationTest() {
+    if (task4DualLineState.phase !== "S4C_WAITING_REAL_TEST") return;
+    task4DualLineState.phase = "S4C_REAL_TEST_ACTIVE";
+    longitudeStage.classList.remove("is-task4-grid-action-visible", "is-draggable");
+    setTask4DualActions();
+    scene.classList.remove(
+      "longitude-active",
+      "task4-longitude-active",
+      "task4-dual-active",
+      "task4-grid-knowledge-visible",
+    );
+    longitudeStage.setAttribute("aria-hidden", "true");
+    scanRecords.setAttribute("aria-hidden", "true");
+    taskReminder.setAttribute("aria-hidden", "true");
+    setTask4ExplorationHudHidden(true);
+    task4Stage.dataset.nextStage = "real-location-test";
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    startTask4LocationTest();
   }
 
   function beginTask4DualLinePractice() {
@@ -4185,6 +4485,7 @@
       );
     }
     updateTask4DualLineGeometry();
+    updateTask4GridGeometry();
   }
 
   function buildLongitudeTeachingGlobe() {
@@ -4889,6 +5190,11 @@
     }
     if (node === TASK4_PROGRESS_NODE.GRID) {
       initializeTask4Story()?.showDirectionSummary([...task4DirectionState.order]);
+      return;
+    }
+    if (node === TASK4_PROGRESS_NODE.REAL_TEST) {
+      task4Stage.dataset.nextStage = "real-location-test";
+      startTask4LocationTest();
       return;
     }
 
@@ -5904,6 +6210,21 @@
     return button;
   }
 
+  function createTask4RealTestProgressItem(task4State) {
+    const isActive = task4State?.node === TASK4_PROGRESS_NODE.REAL_TEST;
+    const item = document.createElement("section");
+    item.className = "progress-task4-subtask";
+    item.classList.toggle("is-active", isActive);
+    item.setAttribute("aria-label", "任务四子任务：真实定位测试");
+
+    const title = document.createElement("p");
+    title.className = "progress-task4-subtask__title";
+    title.textContent = `${isActive ? "●" : "○"} 真实定位测试`;
+
+    item.append(title);
+    return item;
+  }
+
   function renderProgressPanel() {
     progressContinue.replaceChildren();
     progressTaskList.replaceChildren();
@@ -5968,6 +6289,10 @@
           const replayButton = createProgressButton("从本任务开头重玩", "replay-task", task.id);
           replayButton.className = "progress-task-option";
           options.append(continueButton, replayButton);
+          if (task.id === "task4") {
+            const realTestProgressItem = createTask4RealTestProgressItem(progressData.taskState?.task4);
+            options.append(realTestProgressItem);
+          }
           progressTaskList.append(row, options);
           return;
         }
@@ -6375,7 +6700,7 @@
       if (Number.isFinite(selectedLatitude)) handleTask4DualLatitudeSelection(selectedLatitude);
       if (Number.isFinite(selectedLongitude)) handleLongitudeLineSelection(selectedLongitude);
       if (!wasSelectingTask4Line && !handleTask4DualIntersectionClick(event)) {
-        handleTask4SecondCandidateClick(event);
+        if (!handleTask4SecondCandidateClick(event)) handleTask4GridTriggerClick(event);
       }
     }
     window.setTimeout(() => {
@@ -6395,6 +6720,15 @@
     const actionButton = event.target.closest("[data-longitude-action]");
     if (!actionButton) return;
     const action = actionButton.dataset.longitudeAction;
+
+    if (action === "task4-grid-view-discovery") {
+      void revealTask4GridKnowledge();
+      return;
+    }
+    if (action === "task4-grid-start-real-test") {
+      enterTask4RealLocationTest();
+      return;
+    }
 
     if (action === "task4-uniqueness-find") {
       task4DualLineState.phase = "WAITING_FOR_SECOND_CANDIDATE";
