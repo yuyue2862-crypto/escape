@@ -25,16 +25,31 @@
   const formatLatitude = (latitude) => `${Math.abs(latitude)}°${latitude >= 0 ? "N" : "S"}`;
   const formatLongitude = (longitude) => `${Math.abs(longitude)}°${longitude >= 0 ? "E" : "W"}`;
 
-  function create({ stage, globeMount, globeConfig = {}, taskIds = null, onViewChange = null, onSurfaceSelect = null, onCheckpoint = null } = {}) {
-    const requestedTaskIds = Array.isArray(taskIds) && taskIds.length ? new Set(taskIds) : null;
-    const locationTasks = requestedTaskIds
-      ? LOCATION_TASKS.filter((task) => requestedTaskIds.has(task.id))
-      : [...LOCATION_TASKS];
+  function create({
+    stage,
+    globeMount,
+    globeConfig = {},
+    taskIds: initialTaskIds = null,
+    onViewChange = null,
+    onSurfaceSelect = null,
+    onTaskComplete = null,
+    onComplete = null,
+    onCheckpoint = null,
+  } = {}) {
+    const resolveLocationTasks = (taskIds) => {
+      const requestedTaskIds = Array.isArray(taskIds) && taskIds.length ? new Set(taskIds) : null;
+      return requestedTaskIds
+        ? LOCATION_TASKS.filter((task) => requestedTaskIds.has(task.id))
+        : [...LOCATION_TASKS];
+    };
+    let locationTasks = resolveLocationTasks(initialTaskIds);
     if (!locationTasks.length) throw new Error("Task four requires at least one location task.");
     let globe = null;
     let phase = "idle";
+    let presentationMode = "city-test";
     let destroyed = false;
     let statusNode = null;
+    let titleNode = null;
     let instructionNode = null;
     let targetNode = null;
     let feedbackNode = null;
@@ -53,7 +68,7 @@
       if (statusNode || !stage?.ownerDocument) return;
       statusNode = stage.ownerDocument.createElement("div");
       statusNode.className = "task4-stage__status";
-      const titleNode = stage.ownerDocument.createElement("p");
+      titleNode = stage.ownerDocument.createElement("p");
       titleNode.className = "task4-stage__title";
       titleNode.textContent = "定位测试";
       instructionNode = stage.ownerDocument.createElement("p");
@@ -75,8 +90,22 @@
     };
 
     const renderTaskInstruction = () => {
-      if (!instructionNode) return;
+      if (!instructionNode || !titleNode || !targetNode) return;
       const task = getCurrentTask();
+      if (presentationMode === "return-home") {
+        titleNode.textContent = "寻找回家的坐标";
+        instructionNode.replaceChildren(
+          "返航目的地：珠海",
+          instructionNode.ownerDocument.createElement("br"),
+          "已获得坐标：22.27°N，113.58°E",
+          instructionNode.ownerDocument.createElement("br"),
+          "请利用经纬网，亲自锁定返航位置。",
+        );
+        targetNode.hidden = true;
+        return;
+      }
+      titleNode.textContent = "定位测试";
+      targetNode.hidden = false;
       instructionNode.replaceChildren(
         "请根据经纬度，",
         instructionNode.ownerDocument.createElement("br"),
@@ -201,7 +230,8 @@
       globe.clearSelection();
       setFeedback();
       renderTaskInstruction();
-      startTargetTyping();
+      if (presentationMode === "return-home") stopTargetTyping();
+      else startTargetTyping();
       globe.setMode("interactive");
     };
 
@@ -227,13 +257,32 @@
 
       if (accuracyLevel !== "adjust") {
         phase = "located";
-        setFeedback([accuracyLevel === "accurate" ? "定位准确！" : "定位基本准确！"], { success: true });
+        setFeedback(
+          presentationMode === "return-home"
+            ? [
+              accuracyLevel === "accurate" ? "定位准确！" : "定位基本准确！",
+              "返航坐标已锁定",
+              "22.27°N，113.58°E",
+            ]
+            : [accuracyLevel === "accurate" ? "定位准确！" : "定位基本准确！"],
+          { success: true },
+        );
         globe.addMarker(task);
         globe.setMode("rotate");
+        onTaskComplete?.({ task: { ...task }, accuracyLevel });
         if (currentTaskIndex < locationTasks.length - 1) {
           nextTaskTimer = window.setTimeout(() => {
             nextTaskTimer = null;
             if (!destroyed) activateLocationTask(currentTaskIndex + 1);
+          }, NEXT_TASK_DELAY);
+        } else {
+          nextTaskTimer = window.setTimeout(() => {
+            nextTaskTimer = null;
+            if (destroyed || phase !== "located") return;
+            phase = "complete";
+            onComplete?.({
+              completedTasks: locationTasks.map((completedTask) => ({ ...completedTask })),
+            });
           }, NEXT_TASK_DELAY);
         }
       } else {
@@ -269,17 +318,73 @@
         return this;
       },
 
-      start({ taskId = null } = {}) {
+      start({ taskId = null, taskIds = null, completedTaskIds = [], presentation = "city-test" } = {}) {
         assertActive();
         const activeGlobe = ensureGlobe();
         ensureStatus();
         stopNextTaskTimer();
+        stopTargetTyping();
+        if (Array.isArray(taskIds) && taskIds.length) {
+          const nextTasks = resolveLocationTasks(taskIds);
+          if (!nextTasks.length) throw new Error("Task four requires at least one location task.");
+          locationTasks = nextTasks;
+        }
+        presentationMode = presentation === "return-home" ? "return-home" : "city-test";
         const requestedTaskIndex = taskId
           ? locationTasks.findIndex((task) => task.id === taskId)
           : -1;
         currentTaskIndex = requestedTaskIndex >= 0 ? requestedTaskIndex : 0;
+        statusNode?.removeAttribute("hidden");
         activeGlobe.clearMarkers();
+        const completedIds = new Set(completedTaskIds);
+        LOCATION_TASKS.forEach((task) => {
+          if (completedIds.has(task.id)) activeGlobe.addMarker(task);
+        });
         activateLocationTask(currentTaskIndex);
+        stage?.setAttribute("aria-hidden", "false");
+        stage?.removeAttribute("hidden");
+      },
+
+      showFinalLocationComplete({ completedTaskIds = ["beijing", "rio-de-janeiro", "zhuhai"] } = {}) {
+        assertActive();
+        const activeGlobe = ensureGlobe();
+        ensureStatus();
+        stopNextTaskTimer();
+        stopTargetTyping();
+        locationTasks = resolveLocationTasks(["zhuhai"]);
+        currentTaskIndex = 0;
+        presentationMode = "return-home";
+        renderTaskInstruction();
+        activeGlobe.clearSelection();
+        activeGlobe.clearMarkers();
+        const completedIds = new Set(completedTaskIds);
+        LOCATION_TASKS.forEach((task) => {
+          if (completedIds.has(task.id)) activeGlobe.addMarker(task);
+        });
+        activeGlobe.setMode("rotate");
+        setFeedback(["返航坐标已锁定", "22.27°N，113.58°E"], { success: true });
+        phase = "complete";
+        statusNode?.removeAttribute("hidden");
+        stage?.setAttribute("aria-hidden", "false");
+        stage?.removeAttribute("hidden");
+      },
+
+      showCompleted({ completedTaskIds = locationTasks.map((task) => task.id) } = {}) {
+        assertActive();
+        const activeGlobe = ensureGlobe();
+        ensureStatus();
+        stopNextTaskTimer();
+        stopTargetTyping();
+        currentTaskIndex = locationTasks.length - 1;
+        activeGlobe.clearSelection();
+        activeGlobe.clearMarkers();
+        const completedIds = new Set(completedTaskIds);
+        LOCATION_TASKS.forEach((task) => {
+          if (completedIds.has(task.id)) activeGlobe.addMarker(task);
+        });
+        activeGlobe.setMode("rotate");
+        phase = "complete";
+        statusNode?.setAttribute("hidden", "");
         stage?.setAttribute("aria-hidden", "false");
         stage?.removeAttribute("hidden");
       },
@@ -342,6 +447,7 @@
             precisionThresholds,
           },
           globe: globe?.getState() || null,
+          presentationMode,
           destroyed,
         };
       },
@@ -354,6 +460,7 @@
         stopTargetTyping();
         statusNode?.remove();
         statusNode = null;
+        titleNode = null;
         instructionNode = null;
         targetNode = null;
         feedbackNode = null;

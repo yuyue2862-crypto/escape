@@ -1070,7 +1070,500 @@
   cursor: default;
 }
 
-/* S4-03A stays inside the original locator and longitude teaching globe. */
+/* Task-four return-home stages continue to reuse the original locator. */
+.device.is-task4-s409,
+.device.is-task4-s410,
+.device.is-task4-s411 {
+  z-index: 30;
+}
+
+.device.is-task4-s411 {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  pointer-events: none;
+}
+
+.device.is-task4-s411 .device-dock {
+  display: none;
+}
+
+.device.is-task4-s411 .device-panel {
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  top: 50%;
+  width: min(46rem, calc(100vw - 3rem));
+  min-height: min(34rem, calc(100vh - 3rem));
+  max-height: calc(100vh - 3rem);
+  padding: clamp(1.7rem, 3vw, 2.5rem);
+  overflow: auto;
+  transform: translate(-50%, -47%) scale(0.94);
+  transform-origin: center;
+}
+
+.device.is-task4-s411.is-open .device-panel {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+
+.device.is-task4-s411 .device-close {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.device.is-task4-s411 .device-readout {
+  font-size: clamp(1.05rem, 1.5vw, 1.3rem);
+}
+
+.device.is-task4-s411 .device-panel__task4-action {
+  min-width: 10rem;
+  margin-top: clamp(1.5rem, 3vh, 2.2rem);
+  padding: 0.72rem 1.55rem;
+  font-size: clamp(1.05rem, 1.45vw, 1.25rem);
+}
+
+.device.is-task4-s412 .device-dock,
+.device.is-task4-s412 .device-panel {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.task4-stage__status,
+.task4-globe-mount {
+  transition: opacity 760ms ease, filter 900ms ease;
+}
+
+.task4-stage.is-s412-flight .task4-stage__status {
+  opacity: 0;
+}
+
+.task4-real-earth__marker {
+  transition: opacity 900ms ease;
+}
+
+.task4-real-earth__marker.is-s412-departing {
+  opacity: 0;
+}
+
+.task4-stage.is-s412-arrival .task4-globe-mount {
+  opacity: 0.08;
+  filter: blur(1.5px);
+  pointer-events: none;
+}
+
+.task4-arrival {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #e7f3f3;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(28, 117, 139, 0.2), transparent 34%),
+    linear-gradient(160deg, rgba(2, 15, 24, 0.88), rgba(3, 30, 43, 0.96));
+  opacity: 0;
+  transition: opacity 850ms ease;
+}
+
+.task4-arrival.is-visible {
+  opacity: 1;
+}
+
+.task4-arrival__map {
+  position: absolute;
+  inset: clamp(4rem, 9vh, 7rem) clamp(2rem, 8vw, 10rem) clamp(8rem, 18vh, 12rem);
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 229, 0.26);
+  border-radius: clamp(1.5rem, 3vw, 3rem);
+  background:
+    linear-gradient(rgba(99, 184, 201, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 184, 201, 0.08) 1px, transparent 1px),
+    radial-gradient(circle at 52% 47%, rgba(50, 145, 165, 0.2), rgba(3, 29, 43, 0.72) 54%, rgba(2, 19, 29, 0.9));
+  background-size: 3.25rem 3.25rem, 3.25rem 3.25rem, auto;
+  box-shadow: inset 0 0 70px rgba(69, 166, 190, 0.09), 0 24px 80px rgba(0, 0, 0, 0.32);
+}
+
+.task4-arrival__map small {
+  position: absolute;
+  right: clamp(1rem, 2vw, 1.8rem);
+  bottom: clamp(0.8rem, 2vh, 1.4rem);
+  color: rgba(196, 217, 220, 0.58);
+  font-size: clamp(0.86rem, 1vw, 1.05rem);
+  letter-spacing: 0.08em;
+}
+
+.task4-arrival__route {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(114, 205, 224, 0.52), transparent);
+  transform-origin: left center;
+}
+
+.task4-arrival__route--one {
+  top: 56%;
+  left: 14%;
+  width: 72%;
+  transform: rotate(-12deg);
+}
+
+.task4-arrival__route--two {
+  top: 28%;
+  left: 35%;
+  width: 48%;
+  transform: rotate(54deg);
+}
+
+.task4-arrival__island {
+  position: absolute;
+  border: 1px solid rgba(128, 203, 215, 0.32);
+  border-radius: 52% 48% 61% 39%;
+  background: rgba(35, 91, 104, 0.26);
+}
+
+.task4-arrival__island--one {
+  top: 22%;
+  right: 16%;
+  width: clamp(3.5rem, 8vw, 7rem);
+  height: clamp(2.2rem, 5vw, 4.5rem);
+  transform: rotate(-18deg);
+}
+
+.task4-arrival__island--two {
+  bottom: 16%;
+  left: 19%;
+  width: clamp(2.6rem, 6vw, 5rem);
+  height: clamp(1.8rem, 4vw, 3.5rem);
+  transform: rotate(24deg);
+}
+
+.task4-arrival__target {
+  position: absolute;
+  top: 47%;
+  left: 52%;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 224, 132, 0.5);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0.7);
+  opacity: 0.38;
+  transition: opacity 700ms ease, transform 700ms ease, box-shadow 700ms ease;
+}
+
+.task4-arrival__target i {
+  position: absolute;
+  inset: 0.2rem;
+  border-radius: 50%;
+  background: #fff0a6;
+}
+
+.task4-arrival.is-arrived .task4-arrival__target {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  box-shadow: 0 0 0 0.8rem rgba(255, 211, 100, 0.09), 0 0 2rem rgba(255, 211, 100, 0.72);
+}
+
+.task4-arrival__place {
+  position: absolute;
+  top: calc(47% - 0.2rem);
+  left: calc(52% + 1.4rem);
+  display: grid;
+  gap: 0.15rem;
+  opacity: 0.42;
+  transform: translateY(-50%);
+  transition: opacity 700ms ease;
+}
+
+.task4-arrival.is-arrived .task4-arrival__place {
+  opacity: 1;
+}
+
+.task4-arrival__place strong {
+  color: #fff0b1;
+  font-size: clamp(1.4rem, 2vw, 2.1rem);
+  letter-spacing: 0.12em;
+}
+
+.task4-arrival__place span {
+  color: rgba(219, 238, 239, 0.82);
+  font-size: clamp(0.9rem, 1.15vw, 1.15rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.task4-arrival__result {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: clamp(2rem, 5vh, 4rem);
+  left: 0;
+  display: grid;
+  justify-items: center;
+  min-height: 7.5rem;
+  text-align: center;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.72);
+}
+
+.task4-arrival__result h2 {
+  margin: 0;
+  color: #f4dfa0;
+  font-size: clamp(2.2rem, 4vw, 4.2rem);
+  letter-spacing: 0.18em;
+  opacity: 0;
+  transform: translateY(0.35rem);
+  transition: opacity 800ms ease, transform 800ms ease;
+}
+
+.task4-arrival.is-success-visible .task4-arrival__result h2 {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.task4-arrival__result p {
+  min-height: 1.6em;
+  margin: 0.45rem 0 0;
+  color: #e8f1ed;
+  font-size: clamp(1.15rem, 1.8vw, 1.75rem);
+  letter-spacing: 0.05em;
+}
+
+.task4-arrival__result button {
+  margin-top: 0.9rem;
+  min-width: 11rem;
+  border: 1px solid rgba(132, 211, 228, 0.62);
+  border-radius: 999px;
+  padding: 0.65rem 1.45rem;
+  color: #e4f4f4;
+  background: rgba(7, 35, 42, 0.9);
+  box-shadow: 0 0 18px rgba(67, 176, 201, 0.16);
+  font: inherit;
+  font-size: clamp(1rem, 1.35vw, 1.25rem);
+  opacity: 0;
+  transform: translateY(0.35rem);
+  pointer-events: none;
+  transition: opacity 600ms ease, transform 600ms ease, border-color 180ms ease;
+}
+
+.task4-arrival.is-action-visible .task4-arrival__result button {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.task4-arrival__result button:hover,
+.task4-arrival__result button:focus-visible {
+  border-color: rgba(188, 237, 246, 0.95);
+  outline: none;
+}
+
+.task4-arrival__result button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.task4-stage.is-s413-archive .task4-arrival {
+  opacity: 0.18;
+  filter: brightness(0.44) saturate(0.72);
+  pointer-events: none;
+}
+
+.task4-stage.is-s413-archive .task4-arrival__result {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.task4-return-archive {
+  position: absolute;
+  z-index: 7;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  background: rgba(1, 9, 14, 0.54);
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+
+.task4-return-archive.is-visible {
+  opacity: 1;
+}
+
+.task4-return-archive__panel {
+  width: min(50rem, calc(100vw - 3rem));
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+  border: 1px solid rgba(118, 200, 217, 0.5);
+  border-radius: clamp(1.2rem, 2.5vw, 2rem);
+  color: #dceff0;
+  background:
+    linear-gradient(160deg, rgba(8, 34, 42, 0.98), rgba(2, 14, 20, 0.99));
+  box-shadow:
+    0 1.5rem 5rem rgba(0, 0, 0, 0.56),
+    inset 0 0 2.5rem rgba(77, 183, 207, 0.07);
+  transform: translateY(0.65rem) scale(0.985);
+  transition: transform 420ms ease;
+}
+
+.task4-return-archive.is-visible .task4-return-archive__panel {
+  transform: translateY(0) scale(1);
+}
+
+.task4-return-archive__header {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border-bottom: 1px solid rgba(118, 200, 217, 0.22);
+  padding: clamp(1rem, 2vw, 1.4rem) clamp(1.4rem, 4vw, 2.5rem);
+  background: rgba(9, 43, 52, 0.72);
+}
+
+.task4-return-archive__header span {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #7fd8e9;
+  box-shadow: 0 0 0.9rem rgba(92, 214, 235, 0.68);
+}
+
+.task4-return-archive__header h2 {
+  margin: 0;
+  color: #f1dfa0;
+  font-size: clamp(1.65rem, 2.5vw, 2.5rem);
+  letter-spacing: 0.12em;
+}
+
+.task4-return-archive__achievements {
+  display: grid;
+  gap: clamp(0.6rem, 1.5vh, 0.9rem);
+  min-height: 13.5rem;
+  margin: 0;
+  padding: clamp(1.35rem, 3vh, 2rem) clamp(2.5rem, 7vw, 5rem);
+  list-style-position: outside;
+}
+
+.task4-return-archive__achievements li {
+  padding-left: 0.3em;
+  color: #e7f1ed;
+  font-size: clamp(1.08rem, 1.55vw, 1.38rem);
+  line-height: 1.6;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(0.35rem);
+  transition: opacity 520ms ease, transform 520ms ease;
+}
+
+.task4-return-archive__achievements li::marker {
+  color: #82d8e9;
+  font-weight: 700;
+}
+
+.task4-return-archive__achievements li.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.task4-return-archive__result {
+  display: grid;
+  gap: 0.55rem;
+  min-height: 8.7rem;
+  margin: 0;
+  border-top: 1px solid rgba(118, 200, 217, 0.2);
+  padding: clamp(1.15rem, 2.6vh, 1.65rem) clamp(1.4rem, 4vw, 2.5rem);
+  background: rgba(5, 27, 34, 0.64);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(0.35rem);
+  transition: opacity 620ms ease, transform 620ms ease;
+}
+
+.task4-return-archive__result.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.task4-return-archive__result div {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 0.7fr) minmax(0, 1.6fr);
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.task4-return-archive__result dt,
+.task4-return-archive__result dd {
+  margin: 0;
+  font-size: clamp(1rem, 1.4vw, 1.25rem);
+  line-height: 1.45;
+}
+
+.task4-return-archive__result dt {
+  color: rgba(181, 219, 225, 0.72);
+}
+
+.task4-return-archive__result dd {
+  color: #f0dfa1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 620px), (max-height: 680px) {
+  .task4-return-archive__achievements {
+    min-height: 11.5rem;
+    padding: 1rem 2.4rem;
+  }
+
+  .task4-return-archive__result {
+    min-height: 7.4rem;
+    padding-block: 0.9rem;
+  }
+}
+
+@media (max-width: 720px), (max-height: 620px) {
+  .task4-arrival__map {
+    inset: 3.4rem 1.2rem 7.4rem;
+  }
+
+  .task4-arrival__result {
+    bottom: 1rem;
+  }
+}
+
+.device.is-task4-s409 .device-readout {
+  display: none;
+}
+
+.device-panel__task4-story {
+  display: grid;
+  align-content: center;
+  gap: clamp(1rem, 2vh, 1.4rem);
+  min-height: 15rem;
+  padding: clamp(1rem, 2.5vh, 1.5rem) 0.3rem;
+}
+
+.device-panel__task4-story[hidden] {
+  display: none;
+}
+
+.device-panel__task4-story p {
+  margin: 0;
+  color: #dceff0;
+  font-size: var(--font-device, clamp(18px, 1.25vw, 24px));
+  line-height: 1.65;
+  letter-spacing: 0.035em;
+  opacity: 0;
+  transform: translateY(0.4rem);
+  transition: opacity 800ms ease, transform 800ms ease;
+}
+
+.device-panel__task4-story p.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .device-panel__task4-action {
   display: block;
   width: max-content;
@@ -1084,6 +1577,17 @@
   box-shadow: 0 0 18px rgba(67, 176, 201, 0.16);
   font: inherit;
   cursor: pointer;
+}
+
+.device.is-task4-s409 .device-panel__task4-action {
+  opacity: 0;
+  transform: translateY(0.45rem);
+  transition: opacity 700ms ease, transform 700ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.device.is-task4-s409 .device-panel__task4-action.is-s409-visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .device-panel__task4-action[hidden] {

@@ -46,13 +46,20 @@
   const positionTestFeedback = document.querySelector("#positionTestFeedback");
   const positionMapping = document.querySelector("#positionMapping");
   const deviceNetworkRow = document.querySelector("#deviceNetworkRow");
+  const deviceNetworkLabel = deviceNetworkRow.querySelector("dt");
   const deviceNetworkValue = document.querySelector("#deviceNetworkValue");
   const deviceNorthRow = document.querySelector("#deviceNorthRow");
+  const deviceNorthLabel = deviceNorthRow.querySelector("dt");
   const deviceNorthValue = document.querySelector("#deviceNorthValue");
   const deviceEastRow = document.querySelector("#deviceEastRow");
+  const deviceEastLabel = deviceEastRow.querySelector("dt");
   const deviceEastValue = document.querySelector("#deviceEastValue");
   const deviceSystemRow = document.querySelector("#deviceSystemRow");
+  const deviceSystemLabel = deviceSystemRow.querySelector("dt");
   const deviceSystemValue = document.querySelector("#deviceSystemValue");
+  const deviceTask4Story = document.querySelector("#deviceTask4Story");
+  const deviceTask4StoryFirst = document.querySelector("#deviceTask4StoryFirst");
+  const deviceTask4StorySecond = document.querySelector("#deviceTask4StorySecond");
   const deviceTask4Action = document.querySelector("#deviceTask4Action");
   const progressToggle = document.querySelector("#progressToggle");
   const progressOverlay = document.querySelector("#progressOverlay");
@@ -107,15 +114,34 @@
       stage: task4Stage,
       globeMount: task4GlobeMount,
       taskIds: ["beijing", "rio-de-janeiro"],
-      // Task-four checkpoint persistence is deliberately deferred.
+      onTaskComplete: ({ task }) => {
+        if (task.id === "zhuhai") completeTask4FinalLocation(task.id);
+        else recordTask4RealLocationSuccess(task.id);
+      },
+      onComplete: ({ completedTasks = [] } = {}) => {
+        if (completedTasks.some((task) => task.id === "zhuhai")) return;
+        void startTask4ReturnHomeTransition();
+      },
       onCheckpoint: () => {},
     });
     task4Flow.initialize();
     return task4Flow;
   }
 
-  function startTask4LocationTest(taskId = null) {
-    return initializeTask4Architecture()?.start({ taskId }) || null;
+  function startTask4LocationTest(taskId = null, {
+    taskIds = null,
+    completedTaskIds = [],
+    presentation = "city-test",
+  } = {}) {
+    const activeTaskIds = taskIds || (presentation === "return-home"
+      ? ["zhuhai"]
+      : ["beijing", "rio-de-janeiro"]);
+    return initializeTask4Architecture()?.start({
+      taskId,
+      taskIds: activeTaskIds,
+      completedTaskIds,
+      presentation,
+    }) || null;
   }
 
   function initializeTask4Story() {
@@ -249,6 +275,24 @@
   let task4DeviceCloseResolver = null;
   let task4DeviceScanActive = false;
   let task4DeviceRecordReviewActive = false;
+  let task4S411Timer = 0;
+  let task4S412AnimationFrame = 0;
+  let task4S412AnimationResolve = null;
+  const task4S412Timers = new Map();
+  const task4S413Timers = new Map();
+  const task4RealTestState = {
+    completedCities: [],
+    s409Phase: "idle",
+    s410Phase: "idle",
+    s411Phase: "idle",
+    s412Phase: "idle",
+    s413Phase: "idle",
+    returnStatus: "idle",
+    finalDestination: null,
+    finalCoordinates: null,
+    zhuhaiLocated: false,
+    runToken: 0,
+  };
   let relationshipRecordResult = null;
   let latitudeQuestionSequence = 0;
   let longitudeQuestionSequence = 0;
@@ -337,6 +381,23 @@
   const TASK4_UNIQUENESS_ANSWER_DELAY = 1000;
   const TASK4_UNIQUENESS_ANSWER_INTERVAL = 260;
   const TASK4_UNIQUENESS_ANSWER_FADE_DURATION = 420;
+  const TASK4_S409_LINE_REVEAL_DURATION = 800;
+  const TASK4_S409_BUTTON_DELAY = 1000;
+  const TASK4_S409_PHASES = Object.freeze(["idle", "revealing", "waiting", "handoff"]);
+  const TASK4_S410_PHASES = Object.freeze(["idle", "device", "locating", "locked"]);
+  const TASK4_S411_PHASES = Object.freeze(["idle", "observing", "waiting", "started"]);
+  const TASK4_S411_OBSERVE_DURATION = 2000;
+  const TASK4_S412_PHASES = Object.freeze(["idle", "running", "success", "handoff"]);
+  const TASK4_S413_PHASES = Object.freeze(["idle", "revealing", "complete"]);
+  const TASK4_RETURN_ARCHIVE_INTERVAL = 850;
+  const TASK4_RETURN_ARCHIVE_ACHIEVEMENTS = Object.freeze([
+    "通过纬线确定南北位置。",
+    "通过经线确定东西位置。",
+    "通过经纬线交点确定具体位置。",
+    "利用经纬网找到回家的坐标。",
+  ]);
+  const TASK4_RETURN_DESTINATION = "珠海";
+  const TASK4_RETURN_COORDINATES = Object.freeze({ latitude: 22.27, longitude: 113.58 });
 
   const longitudeTeachingValues = [
     -180,
@@ -484,6 +545,16 @@
         directionOrder: [],
         awaitingDirectionChoice: false,
         intersectionExplorationStarted: false,
+        realTestCompletedCities: [],
+        s409Phase: "idle",
+        s410Phase: "idle",
+        s411Phase: "idle",
+        s412Phase: "idle",
+        s413Phase: "idle",
+        returnStatus: "idle",
+        finalDestination: null,
+        finalCoordinates: null,
+        zhuhaiLocated: false,
       },
     };
   }
@@ -559,6 +630,54 @@
     completedTask4Directions.forEach((direction) => {
       if (!task4DirectionOrder.includes(direction)) task4DirectionOrder.push(direction);
     });
+    const task4RealTestCompletedCities = Array.isArray(task4State.realTestCompletedCities)
+      ? [...new Set(task4State.realTestCompletedCities.filter((cityId) => (
+        cityId === "beijing" || cityId === "rio-de-janeiro"
+      )))]
+      : [];
+    const normalizedS409Phase = TASK4_S409_PHASES.includes(task4State.s409Phase)
+      ? task4State.s409Phase
+      : "idle";
+    const realLocationTestsComplete = task4RealTestCompletedCities.includes("beijing")
+      && task4RealTestCompletedCities.includes("rio-de-janeiro");
+    const normalizedZhuhaiLocated = realLocationTestsComplete && (
+      Boolean(task4State.zhuhaiLocated) || task4State.s410Phase === "locked"
+    );
+    const normalizedS410Phase = normalizedZhuhaiLocated
+      ? "locked"
+      : realLocationTestsComplete && TASK4_S410_PHASES.includes(task4State.s410Phase)
+        ? task4State.s410Phase
+        : realLocationTestsComplete && normalizedS409Phase === "handoff"
+          ? "device"
+          : "idle";
+    let normalizedS411Phase = normalizedZhuhaiLocated && TASK4_S411_PHASES.includes(task4State.s411Phase)
+      ? task4State.s411Phase
+      : "idle";
+    let normalizedS412Phase = normalizedZhuhaiLocated && TASK4_S412_PHASES.includes(task4State.s412Phase)
+      ? task4State.s412Phase
+      : "idle";
+    if (normalizedS411Phase === "started" && normalizedS412Phase === "idle") {
+      normalizedS412Phase = "running";
+    }
+    if (normalizedS412Phase !== "idle") normalizedS411Phase = "started";
+    const normalizedS413Phase = normalizedZhuhaiLocated
+      && (normalizedS412Phase === "success" || normalizedS412Phase === "handoff")
+      ? TASK4_S413_PHASES.includes(task4State.s413Phase)
+        ? task4State.s413Phase
+        : normalizedS412Phase === "handoff"
+          ? "revealing"
+          : "idle"
+      : "idle";
+    if (normalizedS413Phase !== "idle") normalizedS412Phase = "handoff";
+    const normalizedReturnStatus = normalizedS412Phase === "success" || normalizedS412Phase === "handoff"
+      ? "success"
+      : normalizedS412Phase === "running"
+        ? "returning"
+        : "idle";
+    const normalizedFinalDestination = normalizedReturnStatus === "success" ? TASK4_RETURN_DESTINATION : null;
+    const normalizedFinalCoordinates = normalizedReturnStatus === "success"
+      ? { ...TASK4_RETURN_COORDINATES }
+      : null;
     const validTask4Nodes = new Set(Object.values(TASK4_PROGRESS_NODE));
     let normalizedTask4Node = validTask4Nodes.has(task4State.node)
       ? task4State.node
@@ -740,6 +859,16 @@
             || normalizedTask4Node === TASK4_PROGRESS_NODE.REAL_TEST
           )
             && Boolean(task4State.intersectionExplorationStarted),
+          realTestCompletedCities: task4RealTestCompletedCities,
+          s409Phase: normalizedS409Phase,
+          s410Phase: normalizedS410Phase,
+          s411Phase: normalizedS411Phase,
+          s412Phase: normalizedS412Phase,
+          s413Phase: normalizedS413Phase,
+          returnStatus: normalizedReturnStatus,
+          finalDestination: normalizedFinalDestination,
+          finalCoordinates: normalizedFinalCoordinates,
+          zhuhaiLocated: normalizedZhuhaiLocated,
         },
       },
     };
@@ -810,10 +939,16 @@
       >= taskOrder.indexOf(checkpointMeta.furthestTask)
       ? previous.furthestTask
       : checkpointMeta.furthestTask;
+    const completedTasksToRemove = new Set(options.completedTasksToRemove || []);
     const completedTasks = [...new Set([
       ...(previous.completedTasks || []),
       ...(options.completedTasks || []),
-    ])];
+    ])].filter((taskId) => !completedTasksToRemove.has(taskId));
+    const nextCompletedTaskState = {
+      ...(previous.completedTaskState || {}),
+      ...(options.completedTaskState || {}),
+    };
+    completedTasksToRemove.forEach((taskId) => delete nextCompletedTaskState[taskId]);
     const shouldCaptureTask1 = checkpoint.startsWith("task1-");
     const shouldCapturePosition = checkpoint.includes("test-") || checkpoint === "position-test-complete";
     const shouldCaptureLatitude = checkpoint.startsWith("latitude-");
@@ -830,10 +965,7 @@
         ...(previous.taskCheckpoints || {}),
         ...(checkpointMeta.task === "opening" ? {} : { [checkpointMeta.task]: checkpoint }),
       },
-      completedTaskState: {
-        ...(previous.completedTaskState || {}),
-        ...(options.completedTaskState || {}),
-      },
+      completedTaskState: nextCompletedTaskState,
       taskState: {
         task1: {
           ...previousState.task1,
@@ -1002,7 +1134,10 @@
     } else {
       return;
     }
-    updateCheckpoint(task.startCheckpoint, { taskState });
+    updateCheckpoint(task.startCheckpoint, {
+      taskState,
+      completedTasksToRemove: taskId === "task4" ? ["task4"] : [],
+    });
     if (!setResumeRequest(task.startCheckpoint)) return;
     window.location.reload();
   }
@@ -2348,6 +2483,7 @@
   }
 
   function resetTask4DirectionProgress() {
+    resetTask4ReturnHomeTransition();
     resetTask4DualLinePractice();
     task4DirectionState.active = null;
     task4DirectionState.order.length = 0;
@@ -2388,6 +2524,18 @@
         node === TASK4_PROGRESS_NODE.GRID || node === TASK4_PROGRESS_NODE.REAL_TEST
       )
         && task4DualLineState.phase !== "idle",
+      realTestCompletedCities: [...task4RealTestState.completedCities],
+      s409Phase: task4RealTestState.s409Phase,
+      s410Phase: task4RealTestState.s410Phase,
+      s411Phase: task4RealTestState.s411Phase,
+      s412Phase: task4RealTestState.s412Phase,
+      s413Phase: task4RealTestState.s413Phase,
+      returnStatus: task4RealTestState.returnStatus,
+      finalDestination: task4RealTestState.finalDestination,
+      finalCoordinates: task4RealTestState.finalCoordinates
+        ? { ...task4RealTestState.finalCoordinates }
+        : null,
+      zhuhaiLocated: task4RealTestState.zhuhaiLocated,
     };
   }
 
@@ -2417,6 +2565,57 @@
     completedDirections.forEach((direction) => {
       if (!task4DirectionState.order.includes(direction)) task4DirectionState.order.push(direction);
     });
+    const savedCompletedCities = Array.isArray(savedState?.realTestCompletedCities)
+      ? savedState.realTestCompletedCities
+      : [];
+    task4RealTestState.completedCities.length = 0;
+    task4RealTestState.completedCities.push(...savedCompletedCities.filter((cityId) => (
+      cityId === "beijing" || cityId === "rio-de-janeiro"
+    )));
+    task4RealTestState.s409Phase = TASK4_S409_PHASES.includes(savedState?.s409Phase)
+      ? savedState.s409Phase
+      : "idle";
+    task4RealTestState.zhuhaiLocated = Boolean(savedState?.zhuhaiLocated)
+      || savedState?.s410Phase === "locked";
+    task4RealTestState.s410Phase = task4RealTestState.zhuhaiLocated
+      ? "locked"
+      : TASK4_S410_PHASES.includes(savedState?.s410Phase)
+        ? savedState.s410Phase
+        : task4RealTestState.s409Phase === "handoff"
+          ? "device"
+          : "idle";
+    task4RealTestState.s411Phase = task4RealTestState.zhuhaiLocated
+      && TASK4_S411_PHASES.includes(savedState?.s411Phase)
+      ? savedState.s411Phase
+      : "idle";
+    task4RealTestState.s412Phase = task4RealTestState.zhuhaiLocated
+      && TASK4_S412_PHASES.includes(savedState?.s412Phase)
+      ? savedState.s412Phase
+      : task4RealTestState.s411Phase === "started"
+        ? "running"
+        : "idle";
+    task4RealTestState.s413Phase = task4RealTestState.zhuhaiLocated
+      && (task4RealTestState.s412Phase === "success" || task4RealTestState.s412Phase === "handoff")
+      ? TASK4_S413_PHASES.includes(savedState?.s413Phase)
+        ? savedState.s413Phase
+        : task4RealTestState.s412Phase === "handoff"
+          ? "revealing"
+          : "idle"
+      : "idle";
+    if (task4RealTestState.s413Phase !== "idle") task4RealTestState.s412Phase = "handoff";
+    if (task4RealTestState.s412Phase !== "idle") task4RealTestState.s411Phase = "started";
+    task4RealTestState.returnStatus = task4RealTestState.s412Phase === "success"
+      || task4RealTestState.s412Phase === "handoff"
+      ? "success"
+      : task4RealTestState.s412Phase === "running"
+        ? "returning"
+        : "idle";
+    task4RealTestState.finalDestination = task4RealTestState.returnStatus === "success"
+      ? TASK4_RETURN_DESTINATION
+      : null;
+    task4RealTestState.finalCoordinates = task4RealTestState.returnStatus === "success"
+      ? { ...TASK4_RETURN_COORDINATES }
+      : null;
   }
 
   function getTask4ProgressLabel(task4State = progressData?.taskState?.task4) {
@@ -2430,6 +2629,33 @@
       case TASK4_PROGRESS_NODE.GRID:
         return "双线定位·探索经纬网";
       case TASK4_PROGRESS_NODE.REAL_TEST:
+        if (task4State?.s413Phase === "complete") {
+          return "任务四完成·最终返航记录";
+        }
+        if (task4State?.s413Phase === "revealing") {
+          return "最终返航记录·整理中";
+        }
+        if (task4State?.s412Phase === "handoff") {
+          return "返航成功·等待查看记录";
+        }
+        if (task4State?.s412Phase === "success" || task4State?.returnStatus === "success") {
+          return "返航成功·珠海";
+        }
+        if (task4State?.s412Phase === "running") {
+          return "正在返航·前往珠海";
+        }
+        if (task4State?.s411Phase === "started") {
+          return "返航准备·正在返航";
+        }
+        if (task4State?.s411Phase === "waiting") {
+          return "返航准备·等待启动";
+        }
+        if (task4State?.s410Phase === "locked" || task4State?.zhuhaiLocated) {
+          return "返航坐标·已锁定";
+        }
+        if (task4State?.s410Phase === "device" || task4State?.s410Phase === "locating") {
+          return "返航坐标·定位珠海";
+        }
         return "真实定位测试·北京与里约热内卢";
       default:
         return "任务四开场";
@@ -2450,7 +2676,16 @@
     return direction === "north" ? "纬度识别已恢复" : "经度识别已恢复";
   }
 
+  function restoreTask4DeviceReadoutStructure() {
+    deviceNetworkLabel.textContent = "线网识别";
+    deviceNorthLabel.textContent = "南北位置";
+    deviceEastLabel.textContent = "东西位置";
+    deviceSystemLabel.textContent = "定位系统";
+    deviceSystemRow.hidden = false;
+  }
+
   function updateTask4DirectionDevice({ scanningDirection = null, highlight = [], preferReference = false } = {}) {
+    restoreTask4DeviceReadoutStructure();
     deviceNetworkRow.hidden = false;
     deviceNetworkValue.textContent = "经线、纬线";
     deviceNorthValue.textContent = getTask4DirectionReadout("north", { preferReference });
@@ -3430,6 +3665,16 @@
   function enterTask4RealLocationTest() {
     if (task4DualLineState.phase !== "S4C_WAITING_REAL_TEST") return;
     task4DualLineState.phase = "S4C_REAL_TEST_ACTIVE";
+    task4RealTestState.completedCities.length = 0;
+    task4RealTestState.s409Phase = "idle";
+    task4RealTestState.s410Phase = "idle";
+    task4RealTestState.s411Phase = "idle";
+    task4RealTestState.s412Phase = "idle";
+    task4RealTestState.s413Phase = "idle";
+    task4RealTestState.returnStatus = "idle";
+    task4RealTestState.finalDestination = null;
+    task4RealTestState.finalCoordinates = null;
+    task4RealTestState.zhuhaiLocated = false;
     longitudeStage.classList.remove("is-task4-grid-action-visible", "is-draggable");
     setTask4DualActions();
     scene.classList.remove(
@@ -3445,6 +3690,642 @@
     task4Stage.dataset.nextStage = "real-location-test";
     saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
     startTask4LocationTest();
+  }
+
+  function resetTask4ReturnHomeTransition() {
+    clearTask4ReturnArchive();
+    clearTask4ReturnSequence();
+    window.clearTimeout(task4S411Timer);
+    task4S411Timer = 0;
+    task4RealTestState.runToken += 1;
+    task4RealTestState.completedCities.length = 0;
+    task4RealTestState.s409Phase = "idle";
+    task4RealTestState.s410Phase = "idle";
+    task4RealTestState.s411Phase = "idle";
+    task4RealTestState.s412Phase = "idle";
+    task4RealTestState.s413Phase = "idle";
+    task4RealTestState.returnStatus = "idle";
+    task4RealTestState.finalDestination = null;
+    task4RealTestState.finalCoordinates = null;
+    task4RealTestState.zhuhaiLocated = false;
+    device.classList.remove("is-task4-s409", "is-task4-s410", "is-task4-s411", "is-task4-s412");
+    restoreTask4DeviceReadoutStructure();
+    deviceTask4Story.hidden = true;
+    deviceTask4StoryFirst.classList.remove("is-visible");
+    deviceTask4StorySecond.classList.remove("is-visible");
+    deviceTask4Action.classList.remove("is-s409-visible");
+    if (
+      deviceTask4Action.dataset.task4Action === "s4-09-find-return"
+      || deviceTask4Action.dataset.task4Action === "s4-10-start-location"
+      || deviceTask4Action.dataset.task4Action === "s4-11-start-return"
+    ) {
+      delete deviceTask4Action.dataset.task4Action;
+      deviceTask4Action.textContent = "尝试定位";
+      deviceTask4Action.hidden = true;
+      deviceTask4Action.disabled = false;
+    }
+  }
+
+  function recordTask4RealLocationSuccess(cityId) {
+    if (cityId !== "beijing" && cityId !== "rio-de-janeiro") return;
+    if (!task4RealTestState.completedCities.includes(cityId)) {
+      task4RealTestState.completedCities.push(cityId);
+    }
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+  }
+
+  function prepareTask4ReturnHomeDevice({ handoff = false } = {}) {
+    task4DeviceRecordReviewActive = false;
+    setTask4DeviceActionAttention(false);
+    restoreTask4DeviceReadoutStructure();
+    device.classList.remove("is-task4-s410", "is-task4-s411");
+    device.classList.add("is-found", "is-position-alert", "is-task4-s409");
+    deviceTask4Story.hidden = false;
+    deviceTask4StoryFirst.classList.add("is-visible");
+    deviceTask4StorySecond.classList.add("is-visible");
+    deviceTask4Action.textContent = "寻找返航坐标";
+    deviceTask4Action.dataset.task4Action = "s4-09-find-return";
+    deviceTask4Action.hidden = false;
+    deviceTask4Action.disabled = handoff;
+    deviceTask4Action.classList.add("is-s409-visible");
+    setDeviceOpen(true);
+  }
+
+  async function startTask4ReturnHomeTransition() {
+    if (task4RealTestState.s409Phase !== "idle") return;
+    if (
+      !task4RealTestState.completedCities.includes("beijing")
+      || !task4RealTestState.completedCities.includes("rio-de-janeiro")
+    ) return;
+
+    const token = ++task4RealTestState.runToken;
+    task4RealTestState.s409Phase = "revealing";
+    task4Stage.dataset.nextStage = "s4-09";
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    task4DeviceRecordReviewActive = false;
+    setTask4DeviceActionAttention(false);
+    device.classList.add("is-found", "is-position-alert", "is-task4-s409");
+    deviceTask4Story.hidden = false;
+    deviceTask4StoryFirst.classList.remove("is-visible");
+    deviceTask4StorySecond.classList.remove("is-visible");
+    deviceTask4Action.textContent = "寻找返航坐标";
+    deviceTask4Action.dataset.task4Action = "s4-09-find-return";
+    deviceTask4Action.classList.remove("is-s409-visible");
+    deviceTask4Action.hidden = true;
+    deviceTask4Action.disabled = false;
+    setDeviceOpen(true);
+
+    await wait(60);
+    if (token !== task4RealTestState.runToken || task4RealTestState.s409Phase !== "revealing") return;
+    deviceTask4StoryFirst.classList.add("is-visible");
+    await wait(TASK4_S409_LINE_REVEAL_DURATION);
+    if (token !== task4RealTestState.runToken || task4RealTestState.s409Phase !== "revealing") return;
+    deviceTask4StorySecond.classList.add("is-visible");
+    await wait(TASK4_S409_LINE_REVEAL_DURATION + TASK4_S409_BUTTON_DELAY);
+    if (token !== task4RealTestState.runToken || task4RealTestState.s409Phase !== "revealing") return;
+
+    task4RealTestState.s409Phase = "waiting";
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    deviceTask4Action.hidden = false;
+    window.requestAnimationFrame(() => {
+      if (token === task4RealTestState.runToken && task4RealTestState.s409Phase === "waiting") {
+        deviceTask4Action.classList.add("is-s409-visible");
+      }
+    });
+  }
+
+  function restoreTask4ReturnHomeTransition(savedPhase) {
+    task4Flow = initializeTask4Architecture();
+    task4Flow?.showCompleted({ completedTaskIds: ["beijing", "rio-de-janeiro"] });
+    task4RealTestState.s409Phase = savedPhase === "handoff" ? "handoff" : "waiting";
+    task4Stage.dataset.nextStage = task4RealTestState.s409Phase === "handoff" ? "s4-10" : "s4-09";
+    prepareTask4ReturnHomeDevice({ handoff: task4RealTestState.s409Phase === "handoff" });
+  }
+
+  function configureTask4FinalLocationDevice({ locked = false } = {}) {
+    task4DeviceRecordReviewActive = false;
+    setTask4DeviceActionAttention(false);
+    device.classList.remove("is-task4-s409", "is-task4-s411");
+    device.classList.add("is-found", "is-position-alert", "is-task4-s410");
+    deviceTask4Story.hidden = true;
+    deviceTask4StoryFirst.classList.remove("is-visible");
+    deviceTask4StorySecond.classList.remove("is-visible");
+    deviceTask4Action.classList.remove("is-s409-visible");
+    deviceNetworkRow.hidden = false;
+    deviceNetworkLabel.textContent = "待定位纬度";
+    deviceNetworkValue.textContent = "22.27°N";
+    deviceNorthRow.hidden = false;
+    deviceNorthLabel.textContent = "待定位经度";
+    deviceNorthValue.textContent = "113.58°E";
+    deviceEastRow.hidden = false;
+    deviceEastLabel.textContent = "坐标状态";
+    deviceEastValue.textContent = locked ? "已锁定" : "等待确认";
+    deviceSystemRow.hidden = true;
+    deviceTask4Action.textContent = "开始定位";
+    deviceTask4Action.dataset.task4Action = "s4-10-start-location";
+    deviceTask4Action.hidden = locked;
+    deviceTask4Action.disabled = locked;
+  }
+
+  function showTask4FinalLocationDevice() {
+    task4RealTestState.s409Phase = "handoff";
+    task4RealTestState.s410Phase = "device";
+    task4Stage.dataset.nextStage = "s4-10-device";
+    configureTask4FinalLocationDevice();
+    setDeviceOpen(true);
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+  }
+
+  function startTask4FinalLocation() {
+    if (task4RealTestState.s410Phase !== "device") return;
+    if (
+      !task4RealTestState.completedCities.includes("beijing")
+      || !task4RealTestState.completedCities.includes("rio-de-janeiro")
+    ) return;
+    task4RealTestState.s410Phase = "locating";
+    task4Stage.dataset.nextStage = "s4-10-locating";
+    deviceTask4Action.disabled = true;
+    deviceTask4Action.hidden = true;
+    device.classList.remove("is-task4-s410");
+    setDeviceOpen(false);
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    startTask4LocationTest("zhuhai", {
+      taskIds: ["zhuhai"],
+      completedTaskIds: ["beijing", "rio-de-janeiro"],
+      presentation: "return-home",
+    });
+  }
+
+  function completeTask4FinalLocation(taskId) {
+    if (taskId !== "zhuhai" || task4RealTestState.s410Phase !== "locating") return;
+    task4RealTestState.zhuhaiLocated = true;
+    task4RealTestState.s410Phase = "locked";
+    task4RealTestState.s411Phase = "observing";
+    task4RealTestState.s412Phase = "idle";
+    task4RealTestState.s413Phase = "idle";
+    task4RealTestState.returnStatus = "idle";
+    task4RealTestState.finalDestination = null;
+    task4RealTestState.finalCoordinates = null;
+    task4Stage.dataset.nextStage = "s4-11-ready";
+    configureTask4FinalLocationDevice({ locked: true });
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    scheduleTask4ReturnLaunchDevice();
+  }
+
+  function configureTask4ReturnLaunchDevice({ started = false } = {}) {
+    if (!task4RealTestState.zhuhaiLocated || task4RealTestState.s410Phase !== "locked") return false;
+    task4DeviceRecordReviewActive = false;
+    setTask4DeviceActionAttention(false);
+    restoreTask4DeviceReadoutStructure();
+    device.classList.remove("is-task4-s409", "is-task4-s410");
+    device.classList.add("is-found", "is-position-alert", "is-task4-s411");
+    deviceTask4Story.hidden = true;
+    deviceTask4StoryFirst.classList.remove("is-visible");
+    deviceTask4StorySecond.classList.remove("is-visible");
+    deviceNetworkRow.hidden = false;
+    deviceNetworkLabel.textContent = "返航坐标";
+    deviceNetworkValue.textContent = "22.27°N，113.58°E";
+    deviceNorthRow.hidden = false;
+    deviceNorthLabel.textContent = "坐标状态";
+    deviceNorthValue.textContent = "已锁定";
+    deviceEastRow.hidden = false;
+    deviceEastLabel.textContent = "返航状态";
+    deviceEastValue.textContent = started ? "正在返航" : "等待启动";
+    deviceSystemRow.hidden = true;
+    deviceTask4Action.classList.remove("is-s409-visible");
+    deviceTask4Action.textContent = "启动返航";
+    deviceTask4Action.dataset.task4Action = "s4-11-start-return";
+    deviceTask4Action.hidden = false;
+    deviceTask4Action.disabled = started;
+    return true;
+  }
+
+  function showTask4ReturnLaunchDevice({ started = false } = {}) {
+    window.clearTimeout(task4S411Timer);
+    task4S411Timer = 0;
+    if (!configureTask4ReturnLaunchDevice({ started })) return;
+    task4RealTestState.s411Phase = started ? "started" : "waiting";
+    task4Stage.dataset.nextStage = started ? "s4-12-ready" : "s4-11-waiting";
+    setDeviceOpen(true);
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+  }
+
+  function scheduleTask4ReturnLaunchDevice() {
+    if (!task4RealTestState.zhuhaiLocated || task4RealTestState.s410Phase !== "locked") return;
+    window.clearTimeout(task4S411Timer);
+    task4RealTestState.s411Phase = "observing";
+    task4Stage.dataset.nextStage = "s4-11-observing";
+    const token = ++task4RealTestState.runToken;
+    task4S411Timer = window.setTimeout(() => {
+      task4S411Timer = 0;
+      if (token !== task4RealTestState.runToken || task4RealTestState.s411Phase !== "observing") return;
+      showTask4ReturnLaunchDevice();
+    }, TASK4_S411_OBSERVE_DURATION);
+  }
+
+  function clearTask4ReturnSequence() {
+    if (task4S412AnimationFrame) window.cancelAnimationFrame(task4S412AnimationFrame);
+    task4S412AnimationFrame = 0;
+    if (task4S412AnimationResolve) {
+      const resolveAnimation = task4S412AnimationResolve;
+      task4S412AnimationResolve = null;
+      resolveAnimation(false);
+    }
+    task4S412Timers.forEach((resolveDelay, timerId) => {
+      window.clearTimeout(timerId);
+      resolveDelay(false);
+    });
+    task4S412Timers.clear();
+    task4Stage.classList.remove("is-s412-flight", "is-s412-arrival");
+    task4Stage.querySelector(".task4-arrival")?.remove();
+    task4GlobeMount.querySelectorAll(".task4-real-earth__marker.is-s412-departing").forEach((marker) => {
+      marker.classList.remove("is-s412-departing");
+    });
+    device.classList.remove("is-task4-s412");
+  }
+
+  function clearTask4ReturnArchive() {
+    task4S413Timers.forEach((resolveDelay, timerId) => {
+      window.clearTimeout(timerId);
+      resolveDelay(false);
+    });
+    task4S413Timers.clear();
+    task4Stage.classList.remove("is-s413-archive");
+    task4Stage.querySelector(".task4-return-archive")?.remove();
+  }
+
+  function waitForTask4ReturnArchive(milliseconds) {
+    return new Promise((resolve) => {
+      const timerId = window.setTimeout(() => {
+        task4S413Timers.delete(timerId);
+        resolve(true);
+      }, milliseconds);
+      task4S413Timers.set(timerId, resolve);
+    });
+  }
+
+  function waitForTask4Return(milliseconds) {
+    return new Promise((resolve) => {
+      const timerId = window.setTimeout(() => {
+        task4S412Timers.delete(timerId);
+        resolve(true);
+      }, milliseconds);
+      task4S412Timers.set(timerId, resolve);
+    });
+  }
+
+  function animateTask4ReturnGlobe(targetView, targetScale, duration, token) {
+    const globeState = task4Flow?.getState()?.globe;
+    if (!globeState) return Promise.resolve(false);
+    const startView = globeState.view;
+    const startScale = globeState.scale;
+    const longitudeDelta = ((targetView.longitude - startView.longitude + 540) % 360) - 180;
+    return new Promise((resolve) => {
+      const startedAt = performance.now();
+      let finished = false;
+      const finish = (result) => {
+        if (finished) return;
+        finished = true;
+        task4S412AnimationFrame = 0;
+        task4S412AnimationResolve = null;
+        resolve(result);
+      };
+      task4S412AnimationResolve = finish;
+      const step = (now) => {
+        if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") {
+          finish(false);
+          return;
+        }
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const eased = progress < 0.5
+          ? 4 * progress ** 3
+          : 1 - ((-2 * progress + 2) ** 3) / 2;
+        task4Flow.setGlobeView({
+          latitude: startView.latitude + (targetView.latitude - startView.latitude) * eased,
+          longitude: startView.longitude + longitudeDelta * eased,
+        });
+        task4Flow.setGlobeScale(startScale + (targetScale - startScale) * eased);
+        if (progress < 1) {
+          task4S412AnimationFrame = window.requestAnimationFrame(step);
+        } else {
+          finish(true);
+        }
+      };
+      task4S412AnimationFrame = window.requestAnimationFrame(step);
+    });
+  }
+
+  function createTask4ArrivalScreen({ complete = false, handoff = false } = {}) {
+    task4Stage.querySelector(".task4-arrival")?.remove();
+    const arrival = document.createElement("section");
+    arrival.className = "task4-arrival";
+    arrival.setAttribute("aria-label", "抵达珠海");
+    arrival.innerHTML = `
+      <div class="task4-arrival__map" role="img" aria-label="珠海区域示意图，非精确地图">
+        <span class="task4-arrival__route task4-arrival__route--one" aria-hidden="true"></span>
+        <span class="task4-arrival__route task4-arrival__route--two" aria-hidden="true"></span>
+        <span class="task4-arrival__island task4-arrival__island--one" aria-hidden="true"></span>
+        <span class="task4-arrival__island task4-arrival__island--two" aria-hidden="true"></span>
+        <div class="task4-arrival__target" aria-hidden="true"><i></i></div>
+        <div class="task4-arrival__place">
+          <strong>珠海</strong>
+          <span>22.27°N，113.58°E</span>
+        </div>
+        <small>珠海区域示意</small>
+      </div>
+      <div class="task4-arrival__result" aria-live="polite">
+        <h2></h2>
+        <p></p>
+        <button type="button">查看返航记录</button>
+      </div>
+    `;
+    const recordButton = arrival.querySelector("button");
+    recordButton.addEventListener("click", handoffTask4ReturnRecord);
+    recordButton.disabled = handoff;
+    recordButton.hidden = !complete;
+    task4Stage.append(arrival);
+    window.requestAnimationFrame(() => arrival.classList.add("is-visible"));
+    if (complete) {
+      arrival.classList.add("is-visible", "is-arrived", "is-success-visible", "is-action-visible");
+      arrival.querySelector(".task4-arrival__result h2").textContent = "返航成功";
+      arrival.querySelector(".task4-arrival__result p").textContent = "你找到了回家的坐标——珠海。";
+    }
+    return arrival;
+  }
+
+  function createTask4ReturnArchive({ complete = false } = {}) {
+    task4Stage.querySelector(".task4-return-archive")?.remove();
+    task4Stage.querySelector(".task4-arrival")?.setAttribute("aria-hidden", "true");
+    const archive = document.createElement("section");
+    archive.className = "task4-return-archive";
+    archive.setAttribute("aria-label", "最终返航记录");
+    archive.innerHTML = `
+      <div class="task4-return-archive__panel" role="document">
+        <header class="task4-return-archive__header">
+          <span aria-hidden="true"></span>
+          <h2>最终返航记录</h2>
+        </header>
+        <ol class="task4-return-archive__achievements" aria-live="polite"></ol>
+        <dl class="task4-return-archive__result">
+          <div><dt>返航目的地</dt><dd></dd></div>
+          <div><dt>返航坐标</dt><dd></dd></div>
+          <div><dt>返航状态</dt><dd></dd></div>
+        </dl>
+      </div>
+    `;
+    const achievements = archive.querySelector(".task4-return-archive__achievements");
+    TASK4_RETURN_ARCHIVE_ACHIEVEMENTS.forEach((text) => {
+      const item = document.createElement("li");
+      item.textContent = text;
+      achievements.append(item);
+    });
+    const resultValues = archive.querySelectorAll(".task4-return-archive__result dd");
+    resultValues[0].textContent = task4RealTestState.finalDestination;
+    resultValues[1].textContent = `${task4RealTestState.finalCoordinates.latitude.toFixed(2)}°N，${task4RealTestState.finalCoordinates.longitude.toFixed(2)}°E`;
+    resultValues[2].textContent = task4RealTestState.returnStatus === "success" ? "成功" : "";
+    task4Stage.append(archive);
+    task4Stage.classList.add("is-s413-archive");
+    window.requestAnimationFrame(() => archive.classList.add("is-visible"));
+    if (complete) {
+      archive.querySelectorAll(".task4-return-archive__achievements li").forEach((item) => {
+        item.classList.add("is-visible");
+      });
+      archive.querySelector(".task4-return-archive__result").classList.add("is-visible");
+      archive.classList.add("is-complete");
+    }
+    return archive;
+  }
+
+  function completeTask4ReturnArchive() {
+    task4RealTestState.s413Phase = "complete";
+    task4RealTestState.s412Phase = "handoff";
+    task4RealTestState.returnStatus = "success";
+    task4RealTestState.finalDestination = TASK4_RETURN_DESTINATION;
+    task4RealTestState.finalCoordinates = { ...TASK4_RETURN_COORDINATES };
+    task4Stage.dataset.nextStage = "s4-13-complete";
+    const archive = task4Stage.querySelector(".task4-return-archive");
+    archive?.classList.add("is-complete");
+    markTaskComplete("task4", "task4-start");
+  }
+
+  async function startTask4ReturnArchive() {
+    if (
+      task4RealTestState.s412Phase !== "handoff"
+      || task4RealTestState.returnStatus !== "success"
+      || task4RealTestState.finalDestination !== TASK4_RETURN_DESTINATION
+      || !task4RealTestState.finalCoordinates
+      || task4RealTestState.s413Phase === "complete"
+    ) return;
+    clearTask4ReturnArchive();
+    const token = ++task4RealTestState.runToken;
+    task4RealTestState.s413Phase = "revealing";
+    task4Stage.dataset.nextStage = "s4-13-revealing";
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    const archive = createTask4ReturnArchive();
+    if (!await waitForTask4ReturnArchive(420)) return;
+    const items = [...archive.querySelectorAll(".task4-return-archive__achievements li")];
+    for (const item of items) {
+      if (token !== task4RealTestState.runToken || task4RealTestState.s413Phase !== "revealing") return;
+      item.classList.add("is-visible");
+      if (!await waitForTask4ReturnArchive(TASK4_RETURN_ARCHIVE_INTERVAL)) return;
+    }
+    if (token !== task4RealTestState.runToken || task4RealTestState.s413Phase !== "revealing") return;
+    archive.querySelector(".task4-return-archive__result").classList.add("is-visible");
+    if (!await waitForTask4ReturnArchive(700)) return;
+    if (token !== task4RealTestState.runToken || task4RealTestState.s413Phase !== "revealing") return;
+    completeTask4ReturnArchive();
+  }
+
+  function restoreTask4ReturnArchive({ complete = false } = {}) {
+    task4RealTestState.s412Phase = "handoff";
+    task4RealTestState.s413Phase = complete ? "complete" : "revealing";
+    task4RealTestState.returnStatus = "success";
+    task4RealTestState.finalDestination = TASK4_RETURN_DESTINATION;
+    task4RealTestState.finalCoordinates = { ...TASK4_RETURN_COORDINATES };
+    restoreTask4ReturnSuccess({ handoff: true });
+    if (complete) {
+      task4Stage.dataset.nextStage = "s4-13-complete";
+      createTask4ReturnArchive({ complete: true });
+      if (!progressData?.completedTasks?.includes("task4")) {
+        markTaskComplete("task4", "task4-start");
+      }
+      return;
+    }
+    void startTask4ReturnArchive();
+  }
+
+  function retainOnlyZhuhaiMarker() {
+    task4Flow?.clearGlobeMarkers();
+    task4Flow?.addGlobeMarker({
+      id: "zhuhai",
+      label: "珠海",
+      latitude: TASK4_RETURN_COORDINATES.latitude,
+      longitude: TASK4_RETURN_COORDINATES.longitude,
+      type: "target",
+    });
+  }
+
+  async function startTask4ReturnSequence() {
+    if (
+      !task4RealTestState.zhuhaiLocated
+      || task4RealTestState.s410Phase !== "locked"
+      || task4RealTestState.s412Phase !== "running"
+    ) return;
+    clearTask4ReturnSequence();
+    const token = ++task4RealTestState.runToken;
+    task4RealTestState.s411Phase = "started";
+    task4RealTestState.returnStatus = "returning";
+    task4Stage.dataset.nextStage = "s4-12-running";
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    setDeviceOpen(false);
+    if (!await waitForTask4Return(650)) return;
+    if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
+
+    device.classList.remove("is-task4-s411");
+    device.classList.add("is-task4-s412");
+    task4Flow = initializeTask4Architecture();
+    task4Flow?.showFinalLocationComplete({
+      completedTaskIds: ["beijing", "rio-de-janeiro", "zhuhai"],
+    });
+    task4Flow?.setGlobeMode("idle");
+    task4Stage.classList.add("is-s412-flight");
+    task4GlobeMount.querySelectorAll(".task4-real-earth__marker").forEach((marker) => {
+      const label = marker.querySelector(".task4-real-earth__marker-label")?.textContent;
+      if (label === "北京" || label === "里约热内卢") marker.classList.add("is-s412-departing");
+    });
+    if (!await waitForTask4Return(950)) return;
+    if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
+    retainOnlyZhuhaiMarker();
+
+    if (!await animateTask4ReturnGlobe({ latitude: 18, longitude: 105 }, 1.35, 2300, token)) return;
+    if (!await animateTask4ReturnGlobe(TASK4_RETURN_COORDINATES, 2, 1900, token)) return;
+    if (!await waitForTask4Return(550)) return;
+    if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
+
+    task4Stage.classList.add("is-s412-arrival");
+    const arrival = createTask4ArrivalScreen();
+    if (!await waitForTask4Return(850)) return;
+    arrival.classList.add("is-arrived");
+    if (!await waitForTask4Return(1000)) return;
+    arrival.querySelector(".task4-arrival__result h2").textContent = "返航成功";
+    arrival.classList.add("is-success-visible");
+    if (!await waitForTask4Return(800)) return;
+
+    const message = arrival.querySelector(".task4-arrival__result p");
+    const messageText = "你找到了回家的坐标——珠海。";
+    for (const character of Array.from(messageText)) {
+      if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
+      message.textContent += character;
+      if (!await waitForTask4Return(70)) return;
+    }
+
+    task4RealTestState.s412Phase = "success";
+    task4RealTestState.returnStatus = "success";
+    task4RealTestState.finalDestination = TASK4_RETURN_DESTINATION;
+    task4RealTestState.finalCoordinates = { ...TASK4_RETURN_COORDINATES };
+    task4Stage.dataset.nextStage = "s4-12-success";
+    arrival.querySelector(".task4-arrival__result button").hidden = false;
+    arrival.classList.add("is-action-visible");
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+  }
+
+  function restoreTask4ReturnSuccess({ handoff = false } = {}) {
+    clearTask4ReturnSequence();
+    task4RealTestState.s411Phase = "started";
+    task4RealTestState.s412Phase = handoff ? "handoff" : "success";
+    task4RealTestState.returnStatus = "success";
+    task4RealTestState.finalDestination = TASK4_RETURN_DESTINATION;
+    task4RealTestState.finalCoordinates = { ...TASK4_RETURN_COORDINATES };
+    task4Stage.dataset.nextStage = handoff ? "s4-13-ready" : "s4-12-success";
+    device.classList.remove("is-task4-s411");
+    device.classList.add("is-task4-s412");
+    setDeviceOpen(false);
+    retainOnlyZhuhaiMarker();
+    task4Flow?.setGlobeMode("idle");
+    task4Flow?.setGlobeView(TASK4_RETURN_COORDINATES);
+    task4Flow?.setGlobeScale(2);
+    task4Stage.classList.add("is-s412-flight", "is-s412-arrival");
+    createTask4ArrivalScreen({ complete: true, handoff });
+  }
+
+  function handoffTask4ReturnRecord() {
+    if (task4RealTestState.s412Phase !== "success") return;
+    task4RealTestState.s412Phase = "handoff";
+    task4RealTestState.s413Phase = "revealing";
+    task4Stage.dataset.nextStage = "s4-13-revealing";
+    const recordButton = task4Stage.querySelector(".task4-arrival__result button");
+    if (recordButton) recordButton.disabled = true;
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    void startTask4ReturnArchive();
+  }
+
+  function startTask4ReturnJourney() {
+    if (
+      task4RealTestState.s411Phase !== "waiting"
+      || !task4RealTestState.zhuhaiLocated
+      || task4RealTestState.s410Phase !== "locked"
+    ) return;
+    task4RealTestState.s411Phase = "started";
+    task4RealTestState.s412Phase = "running";
+    task4RealTestState.s413Phase = "idle";
+    task4RealTestState.returnStatus = "returning";
+    task4Stage.dataset.nextStage = "s4-12-ready";
+    configureTask4ReturnLaunchDevice({ started: true });
+    saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    void startTask4ReturnSequence();
+  }
+
+  function restoreTask4FinalLocation(savedPhase) {
+    task4Flow = initializeTask4Architecture();
+    if (savedPhase === "locked" || task4RealTestState.zhuhaiLocated) {
+      task4RealTestState.s410Phase = "locked";
+      task4RealTestState.zhuhaiLocated = true;
+      task4Stage.dataset.nextStage = "s4-11-ready";
+      configureTask4FinalLocationDevice({ locked: true });
+      task4Flow?.showFinalLocationComplete({
+        completedTaskIds: ["beijing", "rio-de-janeiro", "zhuhai"],
+      });
+      if (task4RealTestState.s413Phase === "complete") {
+        restoreTask4ReturnArchive({ complete: true });
+      } else if (task4RealTestState.s413Phase === "revealing") {
+        restoreTask4ReturnArchive();
+      } else if (task4RealTestState.s412Phase === "running") {
+        void startTask4ReturnSequence();
+      } else if (task4RealTestState.s412Phase === "success") {
+        restoreTask4ReturnSuccess();
+      } else if (task4RealTestState.s412Phase === "handoff") {
+        restoreTask4ReturnSuccess({ handoff: true });
+      } else if (task4RealTestState.s411Phase === "started") {
+        showTask4ReturnLaunchDevice({ started: true });
+      } else if (task4RealTestState.s411Phase === "waiting") {
+        showTask4ReturnLaunchDevice();
+      } else {
+        setDeviceOpen(false);
+        scheduleTask4ReturnLaunchDevice();
+      }
+      return;
+    }
+    if (savedPhase === "locating") {
+      task4RealTestState.s410Phase = "locating";
+      task4Stage.dataset.nextStage = "s4-10-locating";
+      configureTask4FinalLocationDevice();
+      deviceTask4Action.hidden = true;
+      deviceTask4Action.disabled = true;
+      setDeviceOpen(false);
+      startTask4LocationTest("zhuhai", {
+        taskIds: ["zhuhai"],
+        completedTaskIds: ["beijing", "rio-de-janeiro"],
+        presentation: "return-home",
+      });
+      return;
+    }
+    task4Flow?.showCompleted({ completedTaskIds: ["beijing", "rio-de-janeiro"] });
+    showTask4FinalLocationDevice();
+  }
+
+  function handoffTask4ReturnHomeSearch() {
+    if (task4RealTestState.s409Phase !== "waiting") return;
+    showTask4FinalLocationDevice();
   }
 
   function beginTask4DualLinePractice() {
@@ -5194,7 +6075,20 @@
     }
     if (node === TASK4_PROGRESS_NODE.REAL_TEST) {
       task4Stage.dataset.nextStage = "real-location-test";
-      startTask4LocationTest();
+      task4DualLineState.phase = "S4C_REAL_TEST_ACTIVE";
+      const completedCities = [...task4RealTestState.completedCities];
+      const realTestComplete = completedCities.includes("beijing")
+        && completedCities.includes("rio-de-janeiro");
+      if (task4RealTestState.s410Phase !== "idle") {
+        restoreTask4FinalLocation(task4RealTestState.s410Phase);
+        return;
+      }
+      if (realTestComplete || task4RealTestState.s409Phase !== "idle") {
+        restoreTask4ReturnHomeTransition(task4RealTestState.s409Phase);
+        return;
+      }
+      const nextCity = completedCities.includes("beijing") ? "rio-de-janeiro" : "beijing";
+      startTask4LocationTest(nextCity, { completedTaskIds: completedCities });
       return;
     }
 
@@ -5711,7 +6605,13 @@
 
     if (isOpen) {
       if (!wasOpen) playSoundEffect("deviceOpen");
-      if (!positionDeviceReviewActive && !completionDeviceReviewType && !task4DeviceCloseResolver && !task4DeviceRecordReviewActive) {
+      if (
+        !positionDeviceReviewActive
+        && !completionDeviceReviewType
+        && !task4DeviceCloseResolver
+        && !task4DeviceRecordReviewActive
+        && task4RealTestState.s409Phase === "idle"
+      ) {
         deviceTimer = window.setTimeout(() => setDeviceOpen(false), 6800);
       }
       return;
@@ -6263,11 +7163,12 @@
     taskRegistry
       .filter((task) => taskOrder.indexOf(task.id) <= furthestIndex)
       .forEach((task) => {
+        const isCompleted = progressData.completedTasks.includes(task.id);
         const isCurrent = progressData.currentTask === task.id
           && progressData.checkpoint !== "position-test-complete"
           && progressData.checkpoint !== "latitude-complete"
-          && progressData.checkpoint !== "longitude-complete";
-        const isCompleted = progressData.completedTasks.includes(task.id);
+          && progressData.checkpoint !== "longitude-complete"
+          && !(task.id === "task4" && isCompleted);
         const hasSavedCheckpoint = Boolean(progressData.taskCheckpoints?.[task.id]);
         const row = document.createElement("button");
         row.type = "button";
@@ -6859,6 +7760,18 @@
   deviceDock.addEventListener("click", () => setDeviceOpen(true));
   deviceClose.addEventListener("click", () => setDeviceOpen(false));
   deviceTask4Action.addEventListener("click", () => {
+    if (deviceTask4Action.dataset.task4Action === "s4-11-start-return") {
+      startTask4ReturnJourney();
+      return;
+    }
+    if (deviceTask4Action.dataset.task4Action === "s4-10-start-location") {
+      startTask4FinalLocation();
+      return;
+    }
+    if (deviceTask4Action.dataset.task4Action === "s4-09-find-return") {
+      handoffTask4ReturnHomeSearch();
+      return;
+    }
     if (task4DirectionState.north.status !== "complete" || task4DirectionState.east.status !== "complete") return;
     setTask4DeviceActionAttention(false);
     deviceTask4Action.disabled = true;
