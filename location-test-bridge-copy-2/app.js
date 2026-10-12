@@ -398,6 +398,36 @@
   ]);
   const TASK4_RETURN_DESTINATION = "珠海";
   const TASK4_RETURN_COORDINATES = Object.freeze({ latitude: 22.27, longitude: 113.58 });
+  const TASK4_RETURN_CAMERA = Object.freeze({
+    global: Object.freeze({ view: Object.freeze({ latitude: 18, longitude: 110 }), scale: 0.72, duration: 2800, hold: 1200 }),
+    southChina: Object.freeze({ view: Object.freeze({ latitude: 23.2, longitude: 112.2 }), scale: 1.32, duration: 2800, hold: 900 }),
+    zhuhai: Object.freeze({ view: TASK4_RETURN_COORDINATES, scale: 2, duration: 2500, hold: 650 }),
+  });
+  const TASK4_RETURN_IMAGE_HOLD_DURATION = 2000;
+  const TASK4_RETURN_IMAGE_TRANSITION_DURATION = 220;
+  const TASK4_RETURN_IMAGE_SCENES = Object.freeze([
+    Object.freeze({
+      id: "asia-pacific",
+      src: "assets/task4/return-journey/earth-asia-pacific.jpg",
+      label: "亚洲—太平洋半球",
+      alt: "NASA Blue Marble 数据制作的亚洲—太平洋半球真实地球影像",
+      credit: "NASA Earth Observatory / NASA GSFC",
+    }),
+    Object.freeze({
+      id: "china-south-sea",
+      src: "assets/task4/return-journey/china-south-sea.jpg",
+      label: "中国与南海",
+      alt: "NASA Blue Marble 中国及南海卫星影像",
+      credit: "NASA Earth Observatory / NASA GSFC",
+    }),
+    Object.freeze({
+      id: "pearl-river-delta",
+      src: "assets/task4/return-journey/pearl-river-delta-map.jpg",
+      label: "珠江三角洲",
+      alt: "OpenStreetMap 标准图层呈现的珠江三角洲地图",
+      credit: "© OpenStreetMap contributors",
+    }),
+  ]);
 
   const longitudeTeachingValues = [
     -180,
@@ -3937,6 +3967,7 @@
     });
     task4S412Timers.clear();
     task4Stage.classList.remove("is-s412-flight", "is-s412-arrival");
+    delete task4Stage.dataset.returnScene;
     task4Stage.querySelector(".task4-arrival")?.remove();
     task4GlobeMount.querySelectorAll(".task4-real-earth__marker.is-s412-departing").forEach((marker) => {
       marker.classList.remove("is-s412-departing");
@@ -4015,23 +4046,76 @@
     });
   }
 
+  function preloadTask4ReturnImages() {
+    return Promise.all(TASK4_RETURN_IMAGE_SCENES.map((scene) => new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(scene.src);
+      image.onerror = () => reject(new Error(`无法载入返航影像：${scene.src}`));
+      image.src = scene.src;
+    })));
+  }
+
+  function projectTask4ReturnMapPoint(longitude, latitude) {
+    const bounds = { west: 112, south: 21.7, east: 115.47, north: 23.5 };
+    const mercatorY = (value) => Math.log(Math.tan(Math.PI / 4 + value * Math.PI / 360));
+    const northY = mercatorY(bounds.north);
+    const southY = mercatorY(bounds.south);
+    return {
+      x: (longitude - bounds.west) / (bounds.east - bounds.west) * 100,
+      y: (northY - mercatorY(latitude)) / (northY - southY) * 100,
+    };
+  }
+
+  function applyTask4ReturnImageScene(arrival, sceneIndex, { instant = false } = {}) {
+    const scene = TASK4_RETURN_IMAGE_SCENES[sceneIndex];
+    const imagery = arrival.querySelector(".task4-return-imagery");
+    const image = arrival.querySelector(".task4-return-imagery__image");
+    const label = arrival.querySelector(".task4-return-imagery__label");
+    const credit = arrival.querySelector(".task4-return-imagery__credit");
+    imagery.dataset.scene = scene.id;
+    image.src = scene.src;
+    image.alt = scene.alt;
+    label.textContent = scene.label;
+    credit.textContent = scene.credit;
+    imagery.classList.toggle("is-instant", instant);
+    imagery.classList.add("is-image-visible");
+    if (!instant) window.requestAnimationFrame(() => imagery.classList.remove("is-switching"));
+  }
+
+  async function showTask4ReturnImageScene(arrival, sceneIndex) {
+    const imagery = arrival.querySelector(".task4-return-imagery");
+    const firstScene = !imagery.dataset.scene;
+    if (!firstScene) {
+      imagery.classList.add("is-switching");
+      if (!await waitForTask4Return(TASK4_RETURN_IMAGE_TRANSITION_DURATION / 2)) return false;
+    }
+    applyTask4ReturnImageScene(arrival, sceneIndex);
+    if (!await waitForTask4Return(firstScene
+      ? TASK4_RETURN_IMAGE_TRANSITION_DURATION
+      : TASK4_RETURN_IMAGE_TRANSITION_DURATION / 2)) return false;
+    imagery.classList.remove("is-switching");
+    return true;
+  }
+
   function createTask4ArrivalScreen({ complete = false, handoff = false } = {}) {
     task4Stage.querySelector(".task4-arrival")?.remove();
     const arrival = document.createElement("section");
     arrival.className = "task4-arrival";
     arrival.setAttribute("aria-label", "抵达珠海");
     arrival.innerHTML = `
-      <div class="task4-arrival__map" role="img" aria-label="珠海区域示意图，非精确地图">
-        <span class="task4-arrival__route task4-arrival__route--one" aria-hidden="true"></span>
-        <span class="task4-arrival__route task4-arrival__route--two" aria-hidden="true"></span>
-        <span class="task4-arrival__island task4-arrival__island--one" aria-hidden="true"></span>
-        <span class="task4-arrival__island task4-arrival__island--two" aria-hidden="true"></span>
-        <div class="task4-arrival__target" aria-hidden="true"><i></i></div>
-        <div class="task4-arrival__place">
+      <div class="task4-return-imagery" aria-live="polite">
+        <img class="task4-return-imagery__image" alt="" />
+        <div class="task4-return-imagery__shade" aria-hidden="true"></div>
+        <div class="task4-return-imagery__flash" aria-hidden="true"></div>
+        <div class="task4-return-imagery__target" aria-label="珠海，22.27度北，113.58度东">
+          <span class="task4-return-imagery__target-ring" aria-hidden="true"></span>
           <strong>珠海</strong>
-          <span>22.27°N，113.58°E</span>
+          <small>22.27°N，113.58°E</small>
         </div>
-        <small>珠海区域示意</small>
+        <div class="task4-return-imagery__meta">
+          <span class="task4-return-imagery__label"></span>
+          <small class="task4-return-imagery__credit"></small>
+        </div>
       </div>
       <div class="task4-arrival__result" aria-live="polite">
         <h2></h2>
@@ -4039,6 +4123,13 @@
         <button type="button">查看返航记录</button>
       </div>
     `;
+    const targetPoint = projectTask4ReturnMapPoint(
+      TASK4_RETURN_COORDINATES.longitude,
+      TASK4_RETURN_COORDINATES.latitude,
+    );
+    const target = arrival.querySelector(".task4-return-imagery__target");
+    target.style.setProperty("--target-x", `${targetPoint.x.toFixed(3)}%`);
+    target.style.setProperty("--target-y", `${targetPoint.y.toFixed(3)}%`);
     const recordButton = arrival.querySelector("button");
     recordButton.addEventListener("click", handoffTask4ReturnRecord);
     recordButton.disabled = handoff;
@@ -4046,7 +4137,8 @@
     task4Stage.append(arrival);
     window.requestAnimationFrame(() => arrival.classList.add("is-visible"));
     if (complete) {
-      arrival.classList.add("is-visible", "is-arrived", "is-success-visible", "is-action-visible");
+      applyTask4ReturnImageScene(arrival, 2, { instant: true });
+      arrival.classList.add("is-visible", "is-map-visible", "is-arrived", "is-success-visible", "is-action-visible");
       arrival.querySelector(".task4-arrival__result h2").textContent = "返航成功";
       arrival.querySelector(".task4-arrival__result p").textContent = "你找到了回家的坐标——珠海。";
     }
@@ -4173,6 +4265,10 @@
     ) return;
     clearTask4ReturnSequence();
     const token = ++task4RealTestState.runToken;
+    const imageryReady = preloadTask4ReturnImages().then(() => true).catch((error) => {
+      console.error(error);
+      return false;
+    });
     task4RealTestState.s411Phase = "started";
     task4RealTestState.returnStatus = "returning";
     task4Stage.dataset.nextStage = "s4-12-running";
@@ -4197,17 +4293,52 @@
     if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
     retainOnlyZhuhaiMarker();
 
-    if (!await animateTask4ReturnGlobe({ latitude: 18, longitude: 105 }, 1.35, 2300, token)) return;
-    if (!await animateTask4ReturnGlobe(TASK4_RETURN_COORDINATES, 2, 1900, token)) return;
-    if (!await waitForTask4Return(550)) return;
+    task4Stage.dataset.returnScene = "global";
+    if (!await animateTask4ReturnGlobe(
+      TASK4_RETURN_CAMERA.global.view,
+      TASK4_RETURN_CAMERA.global.scale,
+      TASK4_RETURN_CAMERA.global.duration,
+      token,
+    )) return;
+    if (!await waitForTask4Return(TASK4_RETURN_CAMERA.global.hold)) return;
+
+    task4Stage.dataset.returnScene = "south-china";
+    if (!await animateTask4ReturnGlobe(
+      TASK4_RETURN_CAMERA.southChina.view,
+      TASK4_RETURN_CAMERA.southChina.scale,
+      TASK4_RETURN_CAMERA.southChina.duration,
+      token,
+    )) return;
+    if (!await waitForTask4Return(TASK4_RETURN_CAMERA.southChina.hold)) return;
+
+    task4Stage.dataset.returnScene = "zhuhai-near";
+    if (!await animateTask4ReturnGlobe(
+      TASK4_RETURN_CAMERA.zhuhai.view,
+      TASK4_RETURN_CAMERA.zhuhai.scale,
+      TASK4_RETURN_CAMERA.zhuhai.duration,
+      token,
+    )) return;
+    if (!await waitForTask4Return(TASK4_RETURN_CAMERA.zhuhai.hold)) return;
+    if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
+
+    if (!await imageryReady) return;
     if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
 
     task4Stage.classList.add("is-s412-arrival");
     const arrival = createTask4ArrivalScreen();
-    if (!await waitForTask4Return(850)) return;
-    arrival.classList.add("is-arrived");
-    if (!await waitForTask4Return(1000)) return;
+    for (let sceneIndex = 0; sceneIndex < TASK4_RETURN_IMAGE_SCENES.length; sceneIndex += 1) {
+      const scene = TASK4_RETURN_IMAGE_SCENES[sceneIndex];
+      task4Stage.dataset.returnScene = scene.id;
+      if (!await showTask4ReturnImageScene(arrival, sceneIndex)) return;
+      if (!await waitForTask4Return(TASK4_RETURN_IMAGE_HOLD_DURATION)) return;
+      if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
+    }
+
+    task4Stage.dataset.returnScene = "arrived";
+    arrival.classList.add("is-map-visible", "is-arrived");
+    if (!await waitForTask4Return(800)) return;
     arrival.querySelector(".task4-arrival__result h2").textContent = "返航成功";
+    task4Stage.dataset.returnScene = "success";
     arrival.classList.add("is-success-visible");
     if (!await waitForTask4Return(800)) return;
 

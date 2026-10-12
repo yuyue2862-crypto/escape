@@ -1136,6 +1136,27 @@
   transition: opacity 760ms ease, filter 900ms ease;
 }
 
+.task4-stage.is-s412-flight::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(24, 83, 110, 0.17), transparent 33%),
+    radial-gradient(circle at 18% 24%, rgba(84, 158, 182, 0.08) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 78% 30%, rgba(164, 220, 232, 0.07) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 66% 76%, rgba(101, 190, 211, 0.06) 0 1px, transparent 1.8px),
+    linear-gradient(160deg, rgba(1, 9, 16, 0.88), rgba(2, 25, 38, 0.94));
+  background-size: auto, 8rem 8rem, 11rem 11rem, 13rem 13rem, auto;
+  opacity: 1;
+}
+
+.task4-stage.is-s412-flight .task4-globe-mount {
+  z-index: 1;
+  filter: drop-shadow(0 0 2.2rem rgba(75, 172, 202, 0.18));
+}
+
 .task4-stage.is-s412-flight .task4-stage__status {
   opacity: 0;
 }
@@ -1149,8 +1170,8 @@
 }
 
 .task4-stage.is-s412-arrival .task4-globe-mount {
-  opacity: 0.08;
-  filter: blur(1.5px);
+  opacity: 0;
+  filter: blur(2px) brightness(0.55);
   pointer-events: none;
 }
 
@@ -1163,134 +1184,152 @@
   overflow: hidden;
   color: #e7f3f3;
   background:
-    radial-gradient(circle at 50% 48%, rgba(28, 117, 139, 0.2), transparent 34%),
-    linear-gradient(160deg, rgba(2, 15, 24, 0.88), rgba(3, 30, 43, 0.96));
+    radial-gradient(circle at 51% 47%, rgba(29, 119, 144, 0.2), transparent 38%),
+    linear-gradient(160deg, rgba(2, 14, 24, 0.78), rgba(2, 24, 38, 0.97));
   opacity: 0;
-  transition: opacity 850ms ease;
+  transition: opacity 220ms ease;
 }
 
 .task4-arrival.is-visible {
   opacity: 1;
 }
 
-.task4-arrival__map {
+.task4-return-imagery {
   position: absolute;
-  inset: clamp(4rem, 9vh, 7rem) clamp(2rem, 8vw, 10rem) clamp(8rem, 18vh, 12rem);
+  inset: 0;
   overflow: hidden;
-  border: 1px solid rgba(125, 211, 229, 0.26);
-  border-radius: clamp(1.5rem, 3vw, 3rem);
+  background: #02080e;
+}
+
+.task4-return-imagery__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.004);
+  transition: opacity 110ms ease-out;
+}
+
+.task4-return-imagery.is-image-visible .task4-return-imagery__image {
+  opacity: 1;
+}
+
+.task4-return-imagery.is-switching .task4-return-imagery__image {
+  opacity: 0.24;
+}
+
+.task4-return-imagery.is-instant .task4-return-imagery__image {
+  transition: none;
+}
+
+.task4-return-imagery__shade,
+.task4-return-imagery__flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.task4-return-imagery__shade {
   background:
-    linear-gradient(rgba(99, 184, 201, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(99, 184, 201, 0.08) 1px, transparent 1px),
-    radial-gradient(circle at 52% 47%, rgba(50, 145, 165, 0.2), rgba(3, 29, 43, 0.72) 54%, rgba(2, 19, 29, 0.9));
-  background-size: 3.25rem 3.25rem, 3.25rem 3.25rem, auto;
-  box-shadow: inset 0 0 70px rgba(69, 166, 190, 0.09), 0 24px 80px rgba(0, 0, 0, 0.32);
+    linear-gradient(180deg, rgba(0, 6, 11, 0.3), transparent 22%, transparent 72%, rgba(0, 8, 13, 0.56)),
+    radial-gradient(circle at 50% 50%, transparent 54%, rgba(0, 5, 9, 0.32));
 }
 
-.task4-arrival__map small {
-  position: absolute;
-  right: clamp(1rem, 2vw, 1.8rem);
-  bottom: clamp(0.8rem, 2vh, 1.4rem);
-  color: rgba(196, 217, 220, 0.58);
-  font-size: clamp(0.86rem, 1vw, 1.05rem);
-  letter-spacing: 0.08em;
+.task4-return-imagery__flash {
+  background: rgba(218, 244, 249, 0.14);
+  opacity: 0;
+  transition: opacity 110ms ease;
 }
 
-.task4-arrival__route {
-  position: absolute;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(114, 205, 224, 0.52), transparent);
-  transform-origin: left center;
-}
-
-.task4-arrival__route--one {
-  top: 56%;
-  left: 14%;
-  width: 72%;
-  transform: rotate(-12deg);
-}
-
-.task4-arrival__route--two {
-  top: 28%;
-  left: 35%;
-  width: 48%;
-  transform: rotate(54deg);
-}
-
-.task4-arrival__island {
-  position: absolute;
-  border: 1px solid rgba(128, 203, 215, 0.32);
-  border-radius: 52% 48% 61% 39%;
-  background: rgba(35, 91, 104, 0.26);
-}
-
-.task4-arrival__island--one {
-  top: 22%;
-  right: 16%;
-  width: clamp(3.5rem, 8vw, 7rem);
-  height: clamp(2.2rem, 5vw, 4.5rem);
-  transform: rotate(-18deg);
-}
-
-.task4-arrival__island--two {
-  bottom: 16%;
-  left: 19%;
-  width: clamp(2.6rem, 6vw, 5rem);
-  height: clamp(1.8rem, 4vw, 3.5rem);
-  transform: rotate(24deg);
-}
-
-.task4-arrival__target {
-  position: absolute;
-  top: 47%;
-  left: 52%;
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid rgba(255, 224, 132, 0.5);
-  border-radius: 50%;
-  transform: translate(-50%, -50%) scale(0.7);
-  opacity: 0.38;
-  transition: opacity 700ms ease, transform 700ms ease, box-shadow 700ms ease;
-}
-
-.task4-arrival__target i {
-  position: absolute;
-  inset: 0.2rem;
-  border-radius: 50%;
-  background: #fff0a6;
-}
-
-.task4-arrival.is-arrived .task4-arrival__target {
+.task4-return-imagery.is-switching .task4-return-imagery__flash {
   opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
-  box-shadow: 0 0 0 0.8rem rgba(255, 211, 100, 0.09), 0 0 2rem rgba(255, 211, 100, 0.72);
 }
 
-.task4-arrival__place {
+.task4-return-imagery__meta {
   position: absolute;
-  top: calc(47% - 0.2rem);
-  left: calc(52% + 1.4rem);
+  right: clamp(1rem, 2.8vw, 3rem);
+  bottom: clamp(1rem, 2.6vh, 2rem);
+  left: clamp(1rem, 2.8vw, 3rem);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  color: rgba(231, 244, 246, 0.88);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.88);
+}
+
+.task4-return-imagery__label {
+  font-size: clamp(1.08rem, 1.8vw, 1.55rem);
+  font-weight: 650;
+  letter-spacing: 0.1em;
+}
+
+.task4-return-imagery__credit {
+  max-width: 48%;
+  color: rgba(224, 237, 239, 0.66);
+  font-size: clamp(0.68rem, 0.86vw, 0.88rem);
+  letter-spacing: 0.035em;
+  text-align: right;
+}
+
+.task4-return-imagery__target {
+  position: absolute;
+  top: var(--target-y);
+  left: var(--target-x);
   display: grid;
-  gap: 0.15rem;
-  opacity: 0.42;
-  transform: translateY(-50%);
-  transition: opacity 700ms ease;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  column-gap: 0.8rem;
+  color: #fff1ae;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 440ms ease;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.92);
 }
 
-.task4-arrival.is-arrived .task4-arrival__place {
+.task4-return-imagery[data-scene="pearl-river-delta"] .task4-return-imagery__target {
   opacity: 1;
 }
 
-.task4-arrival__place strong {
-  color: #fff0b1;
-  font-size: clamp(1.4rem, 2vw, 2.1rem);
+.task4-return-imagery__target-ring {
+  position: relative;
+  grid-row: 1 / span 2;
+  align-self: center;
+  width: clamp(2.2rem, 3.5vw, 3.6rem);
+  aspect-ratio: 1;
+  border: 2px solid rgba(255, 224, 124, 0.95);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff3b0 0 10%, rgba(255, 211, 81, 0.35) 12% 22%, transparent 24%);
+  box-shadow: 0 0 1.2rem rgba(255, 210, 79, 0.78), inset 0 0 0.8rem rgba(255, 225, 132, 0.35);
+}
+
+.task4-return-imagery__target-ring::after {
+  position: absolute;
+  inset: -2px;
+  content: "";
+  border: 2px solid rgba(255, 224, 124, 0.82);
+  border-radius: inherit;
+  animation: task4-arrival-pulse 1800ms ease-out infinite;
+}
+
+.task4-return-imagery__target strong {
+  align-self: end;
+  font-size: clamp(1.2rem, 2vw, 1.8rem);
   letter-spacing: 0.12em;
 }
 
-.task4-arrival__place span {
-  color: rgba(219, 238, 239, 0.82);
-  font-size: clamp(0.9rem, 1.15vw, 1.15rem);
+.task4-return-imagery__target small {
+  align-self: start;
+  color: rgba(250, 243, 213, 0.92);
+  font-size: clamp(0.78rem, 1.1vw, 1rem);
   font-variant-numeric: tabular-nums;
+}
+
+@keyframes task4-arrival-pulse {
+  0% { opacity: 0.9; transform: scale(0.55); }
+  68%, 100% { opacity: 0; transform: scale(2.4); }
 }
 
 .task4-arrival__result {
@@ -1523,12 +1562,12 @@
 }
 
 @media (max-width: 720px), (max-height: 620px) {
-  .task4-arrival__map {
-    inset: 3.4rem 1.2rem 7.4rem;
-  }
-
   .task4-arrival__result {
     bottom: 1rem;
+  }
+
+  .task4-return-imagery__meta {
+    bottom: 0.7rem;
   }
 }
 
