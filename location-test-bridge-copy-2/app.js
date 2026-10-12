@@ -61,6 +61,9 @@
   const deviceTask4StoryFirst = document.querySelector("#deviceTask4StoryFirst");
   const deviceTask4StorySecond = document.querySelector("#deviceTask4StorySecond");
   const deviceTask4Action = document.querySelector("#deviceTask4Action");
+  const deviceDestinationRow = device.querySelector(".device-readout > div:first-child");
+  const deviceDestinationLabel = deviceDestinationRow.querySelector("dt");
+  const deviceDestinationValue = deviceDestinationRow.querySelector("dd");
   const progressToggle = document.querySelector("#progressToggle");
   const progressOverlay = document.querySelector("#progressOverlay");
   const progressPanel = document.querySelector("#progressPanel");
@@ -230,11 +233,16 @@
 
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
-  // 音频文件放在 assets/audio/；背景音乐从经纬网出现时开始，独立于音效开关。
+  // 音频文件放在 assets/audio/；背景音乐和音效共用右上角的静音开关。
   const audioConfig = {
     bgmSrc: "assets/audio/bgm.mp3",
+    returnJourneyBgmSrc: "assets/audio/return-journey-bgm.mp3",
+    returnFinaleBgmSrc: "assets/audio/return-finale-bgm.mp3",
     bgmVolume: 0.18,
     bgmLoop: true,
+    bgmFadeOutDuration: 900,
+    bgmFadeInDuration: 1200,
+    bgmLoadTimeout: 5000,
     buttonClickSrc: "assets/audio/button-click.mp3",
     buttonClickVolume: 0.3,
     deviceOpenSrc: "assets/audio/device-open.mp3",
@@ -269,6 +277,13 @@
   let audioContext = null;
   let backgroundMusic = null;
   let backgroundMusicRequested = false;
+  let requestedBackgroundTrackId = "default";
+  let activeBackgroundTrackId = null;
+  let backgroundMusicFadeFrame = 0;
+  let backgroundMusicFadeResolve = null;
+  let backgroundMusicSwitchToken = 0;
+  const backgroundMusicTracks = new Map();
+  const backgroundMusicAvailability = new Map();
   const soundEffects = new Map();
   let positionDeviceReviewActive = false;
   let positionDeviceCloseResolver = null;
@@ -276,8 +291,11 @@
   let task4DeviceScanActive = false;
   let task4DeviceRecordReviewActive = false;
   let task4S411Timer = 0;
+  let task4DeviceTextToken = 0;
+  const task4DeviceTextTimers = new Map();
   let task4S412AnimationFrame = 0;
   let task4S412AnimationResolve = null;
+  let task4S412MediaCleanup = null;
   const task4S412Timers = new Map();
   const task4S413Timers = new Map();
   const task4RealTestState = {
@@ -381,8 +399,13 @@
   const TASK4_UNIQUENESS_ANSWER_DELAY = 1000;
   const TASK4_UNIQUENESS_ANSWER_INTERVAL = 260;
   const TASK4_UNIQUENESS_ANSWER_FADE_DURATION = 420;
-  const TASK4_S409_LINE_REVEAL_DURATION = 800;
   const TASK4_S409_BUTTON_DELAY = 1000;
+  const TASK4_S409_FIRST_TYPING_INTERVAL = 55;
+  const TASK4_S409_SECOND_TYPING_INTERVAL = 96;
+  const TASK4_DEVICE_ROW_TYPING_INTERVAL = 48;
+  const TASK4_DEVICE_ROW_DELAY = 280;
+  const TASK4_S411_BUTTON_DELAY = 1000;
+  const TASK4_GRID_INTERSECTION_CONFIRM_DURATION = 1450;
   const TASK4_S409_PHASES = Object.freeze(["idle", "revealing", "waiting", "handoff"]);
   const TASK4_S410_PHASES = Object.freeze(["idle", "device", "locating", "locked"]);
   const TASK4_S411_PHASES = Object.freeze(["idle", "observing", "waiting", "started"]);
@@ -405,6 +428,7 @@
   });
   const TASK4_RETURN_IMAGE_HOLD_DURATION = 2000;
   const TASK4_RETURN_IMAGE_TRANSITION_DURATION = 220;
+  const TASK4_RETURN_APPROACH_DURATION = 4200;
   const TASK4_RETURN_IMAGE_SCENES = Object.freeze([
     Object.freeze({
       id: "asia-pacific",
@@ -3451,8 +3475,25 @@
       });
       return true;
     }
-    void beginTask4GridReveal();
+    void confirmTask4GridIntersection();
     return true;
+  }
+
+  async function confirmTask4GridIntersection() {
+    if (task4DualLineState.phase !== "S4C_WAITING_INTERSECTION") return;
+    const token = task4DualLineState.runToken;
+    task4DualLineState.phase = "S4C_INTERSECTION_CONFIRMING";
+    const marker = longitudeTeachingLabels.querySelector(".task4-dual-intersection-marker");
+    marker?.classList.remove("is-confirming");
+    window.requestAnimationFrame(() => marker?.classList.add("is-confirming"));
+    await wait(TASK4_GRID_INTERSECTION_CONFIRM_DURATION);
+    marker?.classList.remove("is-confirming");
+    if (
+      token !== task4DualLineState.runToken
+      || task4DualLineState.phase !== "S4C_INTERSECTION_CONFIRMING"
+    ) return;
+    task4DualLineState.phase = "S4C_WAITING_INTERSECTION";
+    void beginTask4GridReveal();
   }
 
   function beginTask4UniquenessObservation() {
@@ -3468,7 +3509,7 @@
       instruction: "转动地球仪观察，\n还能找到第二个交点吗？",
     });
     setTask4DualActions([
-      { label: "尝试寻找第二个位置", action: "task4-uniqueness-find" },
+      { label: "寻找第二个位置", action: "task4-uniqueness-find" },
       { label: "没有第二个位置", action: "task4-uniqueness-none" },
     ]);
   }
@@ -3725,6 +3766,7 @@
 
   function enterTask4RealLocationTest() {
     if (task4DualLineState.phase !== "S4C_WAITING_REAL_TEST") return;
+    void switchBackgroundMusic("default");
     task4DualLineState.phase = "S4C_REAL_TEST_ACTIVE";
     task4RealTestState.completedCities.length = 0;
     task4RealTestState.s409Phase = "idle";
@@ -3769,6 +3811,8 @@
     task4RealTestState.finalDestination = null;
     task4RealTestState.finalCoordinates = null;
     task4RealTestState.zhuhaiLocated = false;
+    clearTask4DeviceTextSequence();
+    void switchBackgroundMusic("default");
     device.classList.remove("is-task4-s409", "is-task4-s410", "is-task4-s411", "is-task4-s412");
     restoreTask4DeviceReadoutStructure();
     deviceTask4Story.hidden = true;
@@ -3795,13 +3839,191 @@
     saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
   }
 
+  function clearTask4DeviceTextSequence() {
+    task4DeviceTextToken += 1;
+    task4DeviceTextTimers.forEach((resolveDelay, timerId) => {
+      window.clearTimeout(timerId);
+      resolveDelay(false);
+    });
+    task4DeviceTextTimers.clear();
+    deviceTask4StoryFirst.classList.remove("is-typing");
+    deviceTask4StorySecond.classList.remove("is-typing");
+    device.querySelectorAll(".is-task4-row-pending, .is-task4-row-typing").forEach((row) => {
+      row.classList.remove("is-task4-row-pending", "is-task4-row-typing");
+    });
+    deviceTask4Action.classList.remove("is-s410-visible", "is-s411-visible");
+    setTask4DeviceActionAttention(false);
+  }
+
+  function beginTask4DeviceTextSequence() {
+    clearTask4DeviceTextSequence();
+    return task4DeviceTextToken;
+  }
+
+  function waitForTask4DeviceText(milliseconds, token) {
+    if (token !== task4DeviceTextToken) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const timerId = window.setTimeout(() => {
+        task4DeviceTextTimers.delete(timerId);
+        resolve(token === task4DeviceTextToken);
+      }, milliseconds);
+      task4DeviceTextTimers.set(timerId, resolve);
+    });
+  }
+
+  async function typeTask4DeviceText(node, text, {
+    interval = TASK4_DEVICE_ROW_TYPING_INTERVAL,
+    soundPeak = 0.018,
+    token,
+  } = {}) {
+    node.textContent = "";
+    node.classList.add("is-typing");
+    for (const [characterIndex, character] of Array.from(text).entries()) {
+      if (token !== task4DeviceTextToken) return false;
+      node.textContent += character;
+      playRecordTick(characterIndex, { peak: soundPeak });
+      if (!await waitForTask4DeviceText(interval, token)) return false;
+    }
+    node.classList.remove("is-typing");
+    return token === task4DeviceTextToken;
+  }
+
+  function prepareTask4DeviceRows(rows) {
+    rows.forEach(({ row, label, value, labelText, valueText }) => {
+      row.classList.add("is-task4-row-pending");
+      row.classList.remove("is-task4-row-typing");
+      label.textContent = "";
+      value.textContent = "";
+      row.dataset.task4Label = labelText;
+      row.dataset.task4Value = valueText;
+    });
+  }
+
+  async function typeTask4DeviceRow({ row, label, value, labelText, valueText }, token) {
+    if (token !== task4DeviceTextToken) return false;
+    row.classList.remove("is-task4-row-pending");
+    row.classList.add("is-task4-row-typing");
+    if (!await typeTask4DeviceText(label, labelText, { token })) return false;
+    if (!await typeTask4DeviceText(value, valueText, { token })) return false;
+    row.classList.remove("is-task4-row-typing");
+    return true;
+  }
+
+  function getTask4FinalLocationRows({ locked = false } = {}) {
+    return [
+      {
+        row: deviceDestinationRow,
+        label: deviceDestinationLabel,
+        value: deviceDestinationValue,
+        labelText: "目的地",
+        valueText: "珠海",
+      },
+      {
+        row: deviceNetworkRow,
+        label: deviceNetworkLabel,
+        value: deviceNetworkValue,
+        labelText: "待定位纬度",
+        valueText: "22.27°N",
+      },
+      {
+        row: deviceNorthRow,
+        label: deviceNorthLabel,
+        value: deviceNorthValue,
+        labelText: "待定位经度",
+        valueText: "113.58°E",
+      },
+      {
+        row: deviceEastRow,
+        label: deviceEastLabel,
+        value: deviceEastValue,
+        labelText: "坐标状态",
+        valueText: locked ? "已锁定" : "等待确认",
+      },
+    ];
+  }
+
+  function getTask4ReturnLaunchRows({ started = false } = {}) {
+    return [
+      {
+        row: deviceDestinationRow,
+        label: deviceDestinationLabel,
+        value: deviceDestinationValue,
+        labelText: "目的地",
+        valueText: "珠海",
+      },
+      {
+        row: deviceNetworkRow,
+        label: deviceNetworkLabel,
+        value: deviceNetworkValue,
+        labelText: "返航坐标",
+        valueText: "22.27°N，113.58°E",
+      },
+      {
+        row: deviceNorthRow,
+        label: deviceNorthLabel,
+        value: deviceNorthValue,
+        labelText: "坐标状态",
+        valueText: "已锁定",
+      },
+      {
+        row: deviceEastRow,
+        label: deviceEastLabel,
+        value: deviceEastValue,
+        labelText: "返航状态",
+        valueText: started ? "正在返航" : "等待启动",
+      },
+    ];
+  }
+
+  async function revealTask4FinalLocationDevice(rows) {
+    const token = beginTask4DeviceTextSequence();
+    prepareTask4DeviceRows(rows);
+    deviceTask4Action.hidden = true;
+    deviceTask4Action.disabled = true;
+    for (const [rowIndex, row] of rows.entries()) {
+      if (!await typeTask4DeviceRow(row, token)) return;
+      if (rowIndex < rows.length - 1 && !await waitForTask4DeviceText(TASK4_DEVICE_ROW_DELAY, token)) return;
+    }
+    if (token !== task4DeviceTextToken || task4RealTestState.s410Phase !== "device") return;
+    deviceTask4Action.hidden = false;
+    deviceTask4Action.disabled = false;
+    window.requestAnimationFrame(() => {
+      if (token !== task4DeviceTextToken || task4RealTestState.s410Phase !== "device") return;
+      deviceTask4Action.classList.add("is-s410-visible");
+      setTask4DeviceActionAttention(true);
+    });
+  }
+
+  async function revealTask4ReturnLaunchDevice(rows) {
+    const token = beginTask4DeviceTextSequence();
+    prepareTask4DeviceRows(rows);
+    deviceTask4Action.hidden = true;
+    deviceTask4Action.disabled = true;
+    for (const [rowIndex, row] of rows.entries()) {
+      if (!await typeTask4DeviceRow(row, token)) return;
+      if (rowIndex < rows.length - 1 && !await waitForTask4DeviceText(TASK4_DEVICE_ROW_DELAY, token)) return;
+    }
+    if (!await waitForTask4DeviceText(TASK4_S411_BUTTON_DELAY, token)) return;
+    if (token !== task4DeviceTextToken || task4RealTestState.s411Phase !== "waiting") return;
+    deviceTask4Action.hidden = false;
+    deviceTask4Action.disabled = false;
+    window.requestAnimationFrame(() => {
+      if (token !== task4DeviceTextToken || task4RealTestState.s411Phase !== "waiting") return;
+      deviceTask4Action.classList.add("is-s411-visible");
+      setTask4DeviceActionAttention(true);
+    });
+  }
+
   function prepareTask4ReturnHomeDevice({ handoff = false } = {}) {
+    clearTask4DeviceTextSequence();
     task4DeviceRecordReviewActive = false;
     setTask4DeviceActionAttention(false);
     restoreTask4DeviceReadoutStructure();
     device.classList.remove("is-task4-s410", "is-task4-s411");
     device.classList.add("is-found", "is-position-alert", "is-task4-s409");
     deviceTask4Story.hidden = false;
+    deviceTask4StoryFirst.textContent = "北京和里约热内卢的定位测试已经完成。";
+    deviceTask4StorySecond.textContent = "现在，是时候寻找回家的坐标了！";
     deviceTask4StoryFirst.classList.add("is-visible");
     deviceTask4StorySecond.classList.add("is-visible");
     deviceTask4Action.textContent = "寻找返航坐标";
@@ -3810,6 +4032,8 @@
     deviceTask4Action.disabled = handoff;
     deviceTask4Action.classList.add("is-s409-visible");
     setDeviceOpen(true);
+    setTask4DeviceActionAttention(!handoff);
+    void switchBackgroundMusic("return-journey");
   }
 
   async function startTask4ReturnHomeTransition() {
@@ -3820,6 +4044,7 @@
     ) return;
 
     const token = ++task4RealTestState.runToken;
+    const textToken = beginTask4DeviceTextSequence();
     task4RealTestState.s409Phase = "revealing";
     task4Stage.dataset.nextStage = "s4-09";
     saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
@@ -3827,6 +4052,8 @@
     setTask4DeviceActionAttention(false);
     device.classList.add("is-found", "is-position-alert", "is-task4-s409");
     deviceTask4Story.hidden = false;
+    deviceTask4StoryFirst.textContent = "";
+    deviceTask4StorySecond.textContent = "";
     deviceTask4StoryFirst.classList.remove("is-visible");
     deviceTask4StorySecond.classList.remove("is-visible");
     deviceTask4Action.textContent = "寻找返航坐标";
@@ -3835,14 +4062,25 @@
     deviceTask4Action.hidden = true;
     deviceTask4Action.disabled = false;
     setDeviceOpen(true);
+    void switchBackgroundMusic("return-journey");
 
     await wait(60);
     if (token !== task4RealTestState.runToken || task4RealTestState.s409Phase !== "revealing") return;
     deviceTask4StoryFirst.classList.add("is-visible");
-    await wait(TASK4_S409_LINE_REVEAL_DURATION);
+    if (!await typeTask4DeviceText(
+      deviceTask4StoryFirst,
+      "北京和里约热内卢的定位测试已经完成。",
+      { interval: TASK4_S409_FIRST_TYPING_INTERVAL, soundPeak: 0.019, token: textToken },
+    )) return;
+    if (!await waitForTask4DeviceText(520, textToken)) return;
     if (token !== task4RealTestState.runToken || task4RealTestState.s409Phase !== "revealing") return;
     deviceTask4StorySecond.classList.add("is-visible");
-    await wait(TASK4_S409_LINE_REVEAL_DURATION + TASK4_S409_BUTTON_DELAY);
+    if (!await typeTask4DeviceText(
+      deviceTask4StorySecond,
+      "现在，是时候寻找回家的坐标了！",
+      { interval: TASK4_S409_SECOND_TYPING_INTERVAL, soundPeak: 0.032, token: textToken },
+    )) return;
+    if (!await waitForTask4DeviceText(TASK4_S409_BUTTON_DELAY, textToken)) return;
     if (token !== task4RealTestState.runToken || task4RealTestState.s409Phase !== "revealing") return;
 
     task4RealTestState.s409Phase = "waiting";
@@ -3851,6 +4089,7 @@
     window.requestAnimationFrame(() => {
       if (token === task4RealTestState.runToken && task4RealTestState.s409Phase === "waiting") {
         deviceTask4Action.classList.add("is-s409-visible");
+        setTask4DeviceActionAttention(true);
       }
     });
   }
@@ -3863,7 +4102,8 @@
     prepareTask4ReturnHomeDevice({ handoff: task4RealTestState.s409Phase === "handoff" });
   }
 
-  function configureTask4FinalLocationDevice({ locked = false } = {}) {
+  function configureTask4FinalLocationDevice({ locked = false, reveal = false } = {}) {
+    clearTask4DeviceTextSequence();
     task4DeviceRecordReviewActive = false;
     setTask4DeviceActionAttention(false);
     device.classList.remove("is-task4-s409", "is-task4-s411");
@@ -3873,28 +4113,29 @@
     deviceTask4StorySecond.classList.remove("is-visible");
     deviceTask4Action.classList.remove("is-s409-visible");
     deviceNetworkRow.hidden = false;
-    deviceNetworkLabel.textContent = "待定位纬度";
-    deviceNetworkValue.textContent = "22.27°N";
     deviceNorthRow.hidden = false;
-    deviceNorthLabel.textContent = "待定位经度";
-    deviceNorthValue.textContent = "113.58°E";
     deviceEastRow.hidden = false;
-    deviceEastLabel.textContent = "坐标状态";
-    deviceEastValue.textContent = locked ? "已锁定" : "等待确认";
     deviceSystemRow.hidden = true;
     deviceTask4Action.textContent = "开始定位";
     deviceTask4Action.dataset.task4Action = "s4-10-start-location";
-    deviceTask4Action.hidden = locked;
-    deviceTask4Action.disabled = locked;
+    deviceTask4Action.hidden = locked || reveal;
+    deviceTask4Action.disabled = locked || reveal;
+    const rows = getTask4FinalLocationRows({ locked });
+    rows.forEach(({ label, value, labelText, valueText }) => {
+      label.textContent = labelText;
+      value.textContent = valueText;
+    });
+    return rows;
   }
 
   function showTask4FinalLocationDevice() {
     task4RealTestState.s409Phase = "handoff";
     task4RealTestState.s410Phase = "device";
     task4Stage.dataset.nextStage = "s4-10-device";
-    configureTask4FinalLocationDevice();
+    const rows = configureTask4FinalLocationDevice({ reveal: true });
     setDeviceOpen(true);
     saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    void revealTask4FinalLocationDevice(rows);
   }
 
   function startTask4FinalLocation() {
@@ -3933,8 +4174,9 @@
     scheduleTask4ReturnLaunchDevice();
   }
 
-  function configureTask4ReturnLaunchDevice({ started = false } = {}) {
+  function configureTask4ReturnLaunchDevice({ started = false, reveal = false } = {}) {
     if (!task4RealTestState.zhuhaiLocated || task4RealTestState.s410Phase !== "locked") return false;
+    clearTask4DeviceTextSequence();
     task4DeviceRecordReviewActive = false;
     setTask4DeviceActionAttention(false);
     restoreTask4DeviceReadoutStructure();
@@ -3944,31 +4186,32 @@
     deviceTask4StoryFirst.classList.remove("is-visible");
     deviceTask4StorySecond.classList.remove("is-visible");
     deviceNetworkRow.hidden = false;
-    deviceNetworkLabel.textContent = "返航坐标";
-    deviceNetworkValue.textContent = "22.27°N，113.58°E";
     deviceNorthRow.hidden = false;
-    deviceNorthLabel.textContent = "坐标状态";
-    deviceNorthValue.textContent = "已锁定";
     deviceEastRow.hidden = false;
-    deviceEastLabel.textContent = "返航状态";
-    deviceEastValue.textContent = started ? "正在返航" : "等待启动";
     deviceSystemRow.hidden = true;
     deviceTask4Action.classList.remove("is-s409-visible");
     deviceTask4Action.textContent = "启动返航";
     deviceTask4Action.dataset.task4Action = "s4-11-start-return";
-    deviceTask4Action.hidden = false;
-    deviceTask4Action.disabled = started;
-    return true;
+    deviceTask4Action.hidden = reveal;
+    deviceTask4Action.disabled = started || reveal;
+    const rows = getTask4ReturnLaunchRows({ started });
+    rows.forEach(({ label, value, labelText, valueText }) => {
+      label.textContent = labelText;
+      value.textContent = valueText;
+    });
+    return rows;
   }
 
   function showTask4ReturnLaunchDevice({ started = false } = {}) {
     window.clearTimeout(task4S411Timer);
     task4S411Timer = 0;
-    if (!configureTask4ReturnLaunchDevice({ started })) return;
+    const rows = configureTask4ReturnLaunchDevice({ started, reveal: !started });
+    if (!rows) return;
     task4RealTestState.s411Phase = started ? "started" : "waiting";
     task4Stage.dataset.nextStage = started ? "s4-12-ready" : "s4-11-waiting";
     setDeviceOpen(true);
     saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
+    if (!started) void revealTask4ReturnLaunchDevice(rows);
   }
 
   function scheduleTask4ReturnLaunchDevice() {
@@ -3991,6 +4234,11 @@
       const resolveAnimation = task4S412AnimationResolve;
       task4S412AnimationResolve = null;
       resolveAnimation(false);
+    }
+    if (task4S412MediaCleanup) {
+      const cleanupMedia = task4S412MediaCleanup;
+      task4S412MediaCleanup = null;
+      cleanupMedia();
     }
     task4S412Timers.forEach((resolveDelay, timerId) => {
       window.clearTimeout(timerId);
@@ -4077,13 +4325,14 @@
     });
   }
 
-  function preloadTask4ReturnImages() {
-    return Promise.all(TASK4_RETURN_IMAGE_SCENES.map((scene) => new Promise((resolve, reject) => {
+  function preloadTask4ReturnMedia() {
+    const imagesReady = TASK4_RETURN_IMAGE_SCENES.map((scene) => new Promise((resolve, reject) => {
       const image = new Image();
       image.onload = () => resolve(scene.src);
       image.onerror = () => reject(new Error(`无法载入返航影像：${scene.src}`));
       image.src = scene.src;
-    })));
+    }));
+    return Promise.all(imagesReady);
   }
 
   function projectTask4ReturnMapPoint(longitude, latitude) {
@@ -4139,6 +4388,48 @@
     return true;
   }
 
+  function playTask4ReturnApproach(arrival, token) {
+    const imagery = arrival.querySelector(".task4-return-imagery");
+    const approach = arrival.querySelector(".task4-return-imagery__approach");
+    if (!imagery || !approach) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      let settled = false;
+      let timeoutId = 0;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        approach.removeEventListener("animationend", handleAnimationEnd);
+        imagery.classList.remove("is-approaching");
+        if (task4S412MediaCleanup === cancel) task4S412MediaCleanup = null;
+        resolve(result);
+      };
+      const cancel = () => finish(false);
+      const handleAnimationEnd = (event) => {
+        if (event.target !== approach || event.animationName !== "task4-return-approach-clock") return;
+        if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") {
+          finish(false);
+          return;
+        }
+        applyTask4ReturnImageScene(arrival, 1, { instant: true });
+        finish(true);
+      };
+      task4S412MediaCleanup = cancel;
+      approach.addEventListener("animationend", handleAnimationEnd);
+      imagery.classList.remove("is-approaching");
+      void approach.offsetWidth;
+      imagery.classList.add("is-approaching");
+      timeoutId = window.setTimeout(() => {
+        if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") {
+          finish(false);
+          return;
+        }
+        applyTask4ReturnImageScene(arrival, 1, { instant: true });
+        finish(true);
+      }, TASK4_RETURN_APPROACH_DURATION + 800);
+    });
+  }
+
   function createTask4ArrivalScreen({ complete = false, handoff = false } = {}) {
     task4Stage.querySelector(".task4-arrival")?.remove();
     const arrival = document.createElement("section");
@@ -4146,13 +4437,23 @@
     arrival.setAttribute("aria-label", "抵达珠海");
     arrival.innerHTML = `
       <div class="task4-return-imagery" aria-live="polite">
-        <img class="task4-return-imagery__image" alt="" />
-        <div class="task4-return-imagery__shade" aria-hidden="true"></div>
-        <div class="task4-return-imagery__flash" aria-hidden="true"></div>
-        <div class="task4-return-imagery__target" aria-label="珠海，22.27度北，113.58度东">
-          <span class="task4-return-imagery__target-ring" aria-hidden="true"></span>
-          <strong>珠海</strong>
-          <small>22.27°N，113.58°E</small>
+        <div class="task4-return-imagery__frame">
+          <img class="task4-return-imagery__image" alt="" />
+          <span class="task4-return-imagery__earth-halo task4-return-imagery__earth-halo--static" aria-hidden="true"></span>
+          <div class="task4-return-imagery__approach" aria-hidden="true">
+            <div class="task4-return-imagery__approach-globe">
+              <img src="${TASK4_RETURN_IMAGE_SCENES[0].src}" alt="" />
+              <span class="task4-return-imagery__earth-halo" aria-hidden="true"></span>
+            </div>
+            <img class="task4-return-imagery__approach-map" src="${TASK4_RETURN_IMAGE_SCENES[1].src}" alt="" />
+          </div>
+          <div class="task4-return-imagery__shade" aria-hidden="true"></div>
+          <div class="task4-return-imagery__flash" aria-hidden="true"></div>
+          <div class="task4-return-imagery__target" aria-label="珠海，22.27度北，113.58度东">
+            <span class="task4-return-imagery__target-ring" aria-hidden="true"></span>
+            <strong>珠海</strong>
+            <small>22.27°N，113.58°E</small>
+          </div>
         </div>
         <div class="task4-return-imagery__meta">
           <span class="task4-return-imagery__label"></span>
@@ -4256,6 +4557,7 @@
     task4Stage.dataset.nextStage = "s4-13-revealing";
     saveTask4Progress(TASK4_PROGRESS_NODE.REAL_TEST);
     const archive = createTask4ReturnArchive();
+    void switchBackgroundMusic("return-finale");
     if (!await waitForTask4ReturnArchive(420)) return;
     const items = [...archive.querySelectorAll(".task4-return-archive__achievements li")];
     for (const item of items) {
@@ -4277,6 +4579,7 @@
     task4RealTestState.finalDestination = TASK4_RETURN_DESTINATION;
     task4RealTestState.finalCoordinates = { ...TASK4_RETURN_COORDINATES };
     restoreTask4ReturnSuccess({ handoff: true });
+    void switchBackgroundMusic("return-finale");
     if (complete) {
       task4Stage.dataset.nextStage = "s4-13-complete";
       createTask4ReturnArchive({ complete: true });
@@ -4307,7 +4610,7 @@
     ) return;
     clearTask4ReturnSequence();
     const token = ++task4RealTestState.runToken;
-    const imageryReady = preloadTask4ReturnImages().then(() => true).catch((error) => {
+    const imageryReady = preloadTask4ReturnMedia().then(() => true).catch((error) => {
       console.error(error);
       return false;
     });
@@ -4368,13 +4671,21 @@
 
     task4Stage.classList.add("is-s412-arrival");
     const arrival = createTask4ArrivalScreen();
-    for (let sceneIndex = 0; sceneIndex < TASK4_RETURN_IMAGE_SCENES.length; sceneIndex += 1) {
-      const scene = TASK4_RETURN_IMAGE_SCENES[sceneIndex];
-      task4Stage.dataset.returnScene = scene.id;
-      if (!await showTask4ReturnImageScene(arrival, sceneIndex)) return;
-      if (!await waitForTask4Return(TASK4_RETURN_IMAGE_HOLD_DURATION)) return;
-      if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
-    }
+    task4Stage.dataset.returnScene = TASK4_RETURN_IMAGE_SCENES[0].id;
+    if (!await showTask4ReturnImageScene(arrival, 0)) return;
+    if (!await waitForTask4Return(TASK4_RETURN_IMAGE_HOLD_DURATION)) return;
+    if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
+
+    task4Stage.dataset.returnScene = "earth-approach";
+    if (!await playTask4ReturnApproach(arrival, token)) return;
+    task4Stage.dataset.returnScene = TASK4_RETURN_IMAGE_SCENES[1].id;
+    if (!await waitForTask4Return(TASK4_RETURN_IMAGE_HOLD_DURATION)) return;
+    if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
+
+    task4Stage.dataset.returnScene = TASK4_RETURN_IMAGE_SCENES[2].id;
+    if (!await showTask4ReturnImageScene(arrival, 2)) return;
+    if (!await waitForTask4Return(TASK4_RETURN_IMAGE_HOLD_DURATION)) return;
+    if (token !== task4RealTestState.runToken || task4RealTestState.s412Phase !== "running") return;
 
     task4Stage.dataset.returnScene = "arrived";
     arrival.classList.add("is-map-visible", "is-arrived");
@@ -6316,24 +6627,137 @@
     }
   }
 
-  function getBackgroundMusic() {
-    if (!audioConfig.bgmSrc) return null;
-    if (backgroundMusic) return backgroundMusic;
+  function getBackgroundMusicTrackConfig(trackId = "default") {
+    const src = trackId === "return-journey"
+      ? audioConfig.returnJourneyBgmSrc
+      : trackId === "return-finale"
+        ? audioConfig.returnFinaleBgmSrc
+        : audioConfig.bgmSrc;
+    return src ? { id: trackId, src, volume: audioConfig.bgmVolume } : null;
+  }
 
-    backgroundMusic = new Audio(audioConfig.bgmSrc);
-    backgroundMusic.volume = audioConfig.bgmVolume;
-    backgroundMusic.loop = audioConfig.bgmLoop;
-    backgroundMusic.preload = "auto";
-    return backgroundMusic;
+  function isBackgroundMusicMuted() {
+    return soundToggle.getAttribute("aria-pressed") === "true";
+  }
+
+  function cancelBackgroundMusicFade() {
+    if (backgroundMusicFadeFrame) window.cancelAnimationFrame(backgroundMusicFadeFrame);
+    backgroundMusicFadeFrame = 0;
+    if (backgroundMusicFadeResolve) {
+      const resolveFade = backgroundMusicFadeResolve;
+      backgroundMusicFadeResolve = null;
+      resolveFade(false);
+    }
+  }
+
+  function fadeBackgroundMusic(audio, from, to, duration, token) {
+    cancelBackgroundMusicFade();
+    if (!audio || duration <= 0) {
+      if (audio) audio.volume = to;
+      return Promise.resolve(token === backgroundMusicSwitchToken);
+    }
+    return new Promise((resolve) => {
+      backgroundMusicFadeResolve = resolve;
+      const start = performance.now();
+      const step = (now) => {
+        if (token !== backgroundMusicSwitchToken) {
+          backgroundMusicFadeResolve = null;
+          resolve(false);
+          return;
+        }
+        const progress = Math.min(1, (now - start) / duration);
+        audio.volume = Math.max(0, Math.min(1, from + (to - from) * progress));
+        if (progress >= 1) {
+          backgroundMusicFadeFrame = 0;
+          backgroundMusicFadeResolve = null;
+          resolve(true);
+          return;
+        }
+        backgroundMusicFadeFrame = window.requestAnimationFrame(step);
+      };
+      backgroundMusicFadeFrame = window.requestAnimationFrame(step);
+    });
+  }
+
+  function prepareBackgroundMusicTrack(trackId) {
+    const config = getBackgroundMusicTrackConfig(trackId);
+    if (!config) return Promise.resolve(null);
+    if (backgroundMusicAvailability.has(trackId)) return backgroundMusicAvailability.get(trackId);
+
+    const audio = new Audio(config.src);
+    audio.loop = audioConfig.bgmLoop;
+    audio.preload = "auto";
+    audio.volume = 0;
+    backgroundMusicTracks.set(trackId, audio);
+    const availability = new Promise((resolve) => {
+      let timeoutId = 0;
+      const finish = (track) => {
+        window.clearTimeout(timeoutId);
+        audio.removeEventListener("canplay", handleCanPlay);
+        audio.removeEventListener("error", handleError);
+        resolve(track);
+      };
+      const handleCanPlay = () => finish(audio);
+      const handleError = () => {
+        backgroundMusicTracks.delete(trackId);
+        finish(null);
+      };
+      audio.addEventListener("canplay", handleCanPlay, { once: true });
+      audio.addEventListener("error", handleError, { once: true });
+      timeoutId = window.setTimeout(() => handleError(), audioConfig.bgmLoadTimeout);
+      audio.load();
+    });
+    backgroundMusicAvailability.set(trackId, availability);
+    return availability;
+  }
+
+  async function switchBackgroundMusic(trackId = "default") {
+    requestedBackgroundTrackId = trackId;
+    if (!backgroundMusicRequested || isBackgroundMusicMuted()) return false;
+    if (activeBackgroundTrackId === trackId && backgroundMusic && !backgroundMusic.paused) return true;
+
+    const token = ++backgroundMusicSwitchToken;
+    const next = await prepareBackgroundMusicTrack(trackId);
+    if (!next || token !== backgroundMusicSwitchToken || isBackgroundMusicMuted()) return false;
+    const nextConfig = getBackgroundMusicTrackConfig(trackId);
+    if (!nextConfig) return false;
+
+    const current = backgroundMusic;
+    if (current && current !== next && !current.paused) {
+      if (!await fadeBackgroundMusic(current, current.volume, 0, audioConfig.bgmFadeOutDuration, token)) return false;
+      if (token !== backgroundMusicSwitchToken) return false;
+      current.pause();
+      current.currentTime = 0;
+    }
+
+    next.loop = audioConfig.bgmLoop;
+    next.volume = 0;
+    try {
+      await next.play();
+    } catch {
+      return false;
+    }
+    if (token !== backgroundMusicSwitchToken || isBackgroundMusicMuted()) {
+      next.pause();
+      return false;
+    }
+    backgroundMusic = next;
+    activeBackgroundTrackId = trackId;
+    if (!await fadeBackgroundMusic(next, 0, nextConfig.volume, audioConfig.bgmFadeInDuration, token)) return false;
+    document.removeEventListener("pointerdown", retryBackgroundMusic);
+    document.removeEventListener("keydown", retryBackgroundMusic);
+    return true;
+  }
+
+  function pauseBackgroundMusic() {
+    backgroundMusicSwitchToken += 1;
+    cancelBackgroundMusicFade();
+    backgroundMusic?.pause();
   }
 
   function resumeBackgroundMusic() {
-    const music = getBackgroundMusic();
-    if (!music || !music.paused) return;
-    music.play().then(() => {
-      document.removeEventListener("pointerdown", retryBackgroundMusic);
-      document.removeEventListener("keydown", retryBackgroundMusic);
-    }).catch(() => {});
+    if (isBackgroundMusicMuted()) return;
+    void switchBackgroundMusic(requestedBackgroundTrackId);
   }
 
   function retryBackgroundMusic() {
@@ -6371,7 +6795,7 @@
     });
   }
 
-  function playRecordTick(characterIndex) {
+  function playRecordTick(characterIndex, { peak = 0.018, frequency = 410 } = {}) {
     if (soundToggle.getAttribute("aria-pressed") === "true" || characterIndex % 2 !== 0) return;
     const context = getAudioContext();
     if (!context || context.state !== "running") return;
@@ -6380,10 +6804,10 @@
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(410, now);
-    oscillator.frequency.exponentialRampToValueAtTime(350, now + 0.05);
+    oscillator.frequency.setValueAtTime(frequency, now);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(220, frequency - 60), now + 0.05);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.018, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(peak, now + 0.008);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
     oscillator.connect(gain);
     gain.connect(context.destination);
@@ -7959,9 +8383,11 @@
       if (context?.state === "suspended") {
         context.resume().catch(() => {});
       }
+      resumeBackgroundMusic();
       return;
     }
     stopSoundEffects();
+    pauseBackgroundMusic();
   });
 
   document.addEventListener("click", (event) => {

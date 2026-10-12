@@ -10,6 +10,8 @@
   const TARGET_LINE_DELAY = 90;
   const TARGET_REVEAL_DELAY = 2000;
   const TARGET_TYPING_SOUND_PEAK = 0.028;
+  const RETURN_HOME_TYPING_INTERVAL = 44;
+  const RETURN_HOME_LINE_DELAY = 240;
   const NEXT_TASK_DELAY = 1400;
   const radians = (angle) => angle * Math.PI / 180;
 
@@ -89,21 +91,30 @@
       nextTaskTimer = null;
     };
 
-    const renderTaskInstruction = () => {
+    const renderTaskInstruction = ({ prepareTyping = false } = {}) => {
       if (!instructionNode || !titleNode || !targetNode) return;
       const task = getCurrentTask();
       if (presentationMode === "return-home") {
+        statusNode.dataset.presentation = "return-home";
         titleNode.textContent = "寻找回家的坐标";
-        instructionNode.replaceChildren(
+        instructionNode.classList.add("is-return-home");
+        const lines = [
           "返航目的地：珠海",
-          instructionNode.ownerDocument.createElement("br"),
           "已获得坐标：22.27°N，113.58°E",
-          instructionNode.ownerDocument.createElement("br"),
           "请利用经纬网，亲自锁定返航位置。",
-        );
+        ].map((text) => {
+          const line = instructionNode.ownerDocument.createElement("span");
+          line.className = "task4-stage__instruction-line";
+          line.dataset.text = text;
+          line.textContent = prepareTyping ? "" : text;
+          return line;
+        });
+        instructionNode.replaceChildren(...lines);
         targetNode.hidden = true;
         return;
       }
+      delete statusNode.dataset.presentation;
+      instructionNode.classList.remove("is-return-home", "is-typing");
       titleNode.textContent = "定位测试";
       targetNode.hidden = false;
       instructionNode.replaceChildren(
@@ -111,6 +122,42 @@
         instructionNode.ownerDocument.createElement("br"),
         `在球面上点击${task.name}的坐标位置。`,
       );
+    };
+
+    const startReturnHomeInstructionTyping = () => {
+      if (!instructionNode) return;
+      prepareTargetTypingAudio();
+      stopTargetTyping();
+      const token = ++typingToken;
+      const lines = [...instructionNode.querySelectorAll(".task4-stage__instruction-line")];
+      let lineIndex = 0;
+      let characterOffset = 0;
+      let characterIndex = 0;
+
+      const writeNextCharacter = () => {
+        if (destroyed || token !== typingToken) return;
+        const line = lines[lineIndex];
+        const text = line?.dataset.text || "";
+        if (characterOffset < text.length) {
+          line.textContent += text[characterOffset];
+          playTargetTypingTick(characterIndex);
+          characterOffset += 1;
+          characterIndex += 1;
+          typingTimer = window.setTimeout(writeNextCharacter, RETURN_HOME_TYPING_INTERVAL);
+          return;
+        }
+        lineIndex += 1;
+        characterOffset = 0;
+        if (lineIndex < lines.length) {
+          typingTimer = window.setTimeout(writeNextCharacter, RETURN_HOME_LINE_DELAY);
+          return;
+        }
+        typingTimer = null;
+        instructionNode.classList.remove("is-typing");
+      };
+
+      instructionNode.classList.add("is-typing");
+      writeNextCharacter();
     };
 
     const stopTargetTyping = () => {
@@ -121,6 +168,7 @@
       targetRevealTimer = null;
       targetNode?.classList.remove("is-typing");
       targetNode?.classList.remove("is-pending");
+      instructionNode?.classList.remove("is-typing");
     };
 
     const getTypingAudioContext = () => {
@@ -229,8 +277,8 @@
       phase = "ready";
       globe.clearSelection();
       setFeedback();
-      renderTaskInstruction();
-      if (presentationMode === "return-home") stopTargetTyping();
+      renderTaskInstruction({ prepareTyping: presentationMode === "return-home" });
+      if (presentationMode === "return-home") startReturnHomeInstructionTyping();
       else startTargetTyping();
       globe.setMode("interactive");
     };

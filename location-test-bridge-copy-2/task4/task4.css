@@ -330,6 +330,27 @@
   font-size: clamp(18px, 1.3vw, 24px);
 }
 
+.task4-stage__status[data-presentation="return-home"] .task4-stage__instruction {
+  min-height: calc(3 * 1.45em);
+  color: #9edced;
+  font-size: clamp(20px, 1.44vw, 27px);
+}
+
+.task4-stage__instruction-line {
+  display: block;
+  min-height: 1.45em;
+}
+
+.task4-stage__instruction.is-typing::after,
+.device-panel__task4-story p.is-typing::after,
+.device-readout dd.is-typing::after {
+  content: "▍";
+  display: inline-block;
+  margin-left: 0.14em;
+  color: #b8edf8;
+  animation: task4-target-caret 0.65s steps(1, end) infinite;
+}
+
 .task4-stage__target {
   margin-top: 0.7em;
   min-height: calc(2 * 1.45em + 0.25em);
@@ -379,6 +400,13 @@
   color: #ffad5c;
   font-weight: 700;
   animation: task4-feedback-success 1s ease-out both;
+}
+
+.task4-stage__status[data-presentation="return-home"] .task4-stage__feedback.is-success {
+  color: #ff9c3f;
+  font-size: clamp(20px, 1.56vw, 27px);
+  line-height: 1.55;
+  text-shadow: 0 0 15px rgba(255, 146, 55, 0.38), 0 2px 10px #02090d;
 }
 
 @keyframes task4-target-caret {
@@ -1114,14 +1142,56 @@
 }
 
 .device.is-task4-s411 .device-readout {
-  font-size: clamp(1.05rem, 1.5vw, 1.3rem);
+  font-size: clamp(1.18rem, 1.68vw, 1.46rem);
+}
+
+.device.is-task4-s411 .device-panel__header h1,
+.device.is-task4-s411 .device-readout dt,
+.device.is-task4-s411 .device-readout dd {
+  font-size: 1.12em;
+}
+
+.device.is-task4-s411 .device-readout dd {
+  color: #ffad58;
+  animation: task4-s411-value-breathe 2.4s ease-in-out infinite;
 }
 
 .device.is-task4-s411 .device-panel__task4-action {
   min-width: 10rem;
   margin-top: clamp(1.5rem, 3vh, 2.2rem);
+  margin-inline: auto;
   padding: 0.72rem 1.55rem;
-  font-size: clamp(1.05rem, 1.45vw, 1.25rem);
+  font-size: clamp(1.26rem, 1.74vw, 1.5rem);
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 700ms ease, transform 760ms cubic-bezier(0.2, 0.78, 0.22, 1);
+}
+
+.device.is-task4-s411 .device-panel__task4-action:not(.is-s411-visible) {
+  opacity: 0;
+  transform: scale(1.12);
+}
+
+.device.is-task4-s411 .device-panel__task4-action.is-attention {
+  animation: task4-s411-action-attention 2.2s ease-in-out infinite;
+}
+
+@keyframes task4-s411-value-breathe {
+  0%, 100% { text-shadow: 0 0 7px rgba(255, 193, 77, 0.22); }
+  50% { text-shadow: 0 0 16px rgba(255, 205, 91, 0.62); }
+}
+
+@keyframes task4-s411-action-attention {
+  0%, 100% {
+    border-color: rgba(238, 191, 83, 0.68);
+    background: rgba(24, 45, 45, 0.94);
+    box-shadow: 0 0 18px rgba(230, 180, 70, 0.24);
+  }
+  50% {
+    border-color: rgba(255, 224, 135, 0.98);
+    background: rgba(64, 65, 37, 0.98);
+    box-shadow: 0 0 31px rgba(255, 205, 91, 0.62), inset 0 0 13px rgba(255, 229, 147, 0.16);
+  }
 }
 
 .device.is-task4-s412 .device-dock,
@@ -1198,17 +1268,97 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(13, 47, 67, 0.48), transparent 58%),
+    #02080e;
+}
+
+.task4-return-imagery__frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(100%, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
   background: #02080e;
+  transform: translate(-50%, -50%);
+}
+
+@supports (height: 100dvh) {
+  .task4-return-imagery__frame {
+    width: min(100%, calc(100dvh * 16 / 9));
+  }
 }
 
 .task4-return-imagery__image {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   opacity: 0;
   transform: scale(1.004);
-  transition: opacity 110ms ease-out;
+  transition: opacity 110ms ease-out, filter 500ms ease;
+}
+
+.task4-return-imagery__approach {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.task4-return-imagery__approach-globe,
+.task4-return-imagery__approach-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.task4-return-imagery__approach-globe {
+  transform-origin: 54% 42%;
+}
+
+.task4-return-imagery__approach-globe img,
+.task4-return-imagery__approach-map {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.task4-return-imagery__approach-globe img {
+  filter: brightness(1.2) contrast(1.11) saturate(1.1);
+}
+
+.task4-return-imagery__approach-map {
+  opacity: 0;
+  filter: brightness(1.15) contrast(1.09) saturate(1.07);
+}
+
+.task4-return-imagery.is-approaching .task4-return-imagery__approach {
+  opacity: 1;
+  animation: task4-return-approach-clock 4200ms linear both;
+  animation-duration: 4200ms !important;
+}
+
+.task4-return-imagery.is-approaching .task4-return-imagery__approach-globe {
+  animation: task4-return-globe-approach 4200ms cubic-bezier(0.42, 0, 0.18, 1) both;
+  animation-duration: 4200ms !important;
+}
+
+.task4-return-imagery.is-approaching .task4-return-imagery__approach-map {
+  animation: task4-return-map-approach 4200ms cubic-bezier(0.36, 0, 0.2, 1) both;
+  animation-duration: 4200ms !important;
+}
+
+.task4-return-imagery.is-approaching .task4-return-imagery__image,
+.task4-return-imagery.is-approaching .task4-return-imagery__earth-halo--static {
+  opacity: 0;
 }
 
 .task4-return-imagery.is-image-visible .task4-return-imagery__image {
@@ -1223,9 +1373,50 @@
   transition: none;
 }
 
+.task4-return-imagery[data-scene="asia-pacific"] .task4-return-imagery__image {
+  filter: brightness(1.2) contrast(1.11) saturate(1.1);
+}
+
+.task4-return-imagery[data-scene="china-south-sea"] .task4-return-imagery__image {
+  filter: brightness(1.15) contrast(1.09) saturate(1.07);
+}
+
+.task4-return-imagery__earth-halo {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: 47.5%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    transparent 60%,
+    rgba(143, 226, 247, 0.08) 63%,
+    rgba(122, 216, 242, 0.42) 66%,
+    rgba(105, 202, 234, 0.15) 70%,
+    transparent 76%
+  );
+  box-shadow: 0 0 2.1rem rgba(91, 199, 231, 0.22);
+  filter: blur(4px);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 420ms ease;
+}
+
+.task4-return-imagery[data-scene="asia-pacific"] .task4-return-imagery__earth-halo--static {
+  opacity: 0.88;
+}
+
+.task4-return-imagery__approach-globe .task4-return-imagery__earth-halo {
+  opacity: 0.88;
+}
+
 .task4-return-imagery__shade,
 .task4-return-imagery__flash {
   position: absolute;
+  z-index: 4;
   inset: 0;
   pointer-events: none;
 }
@@ -1237,9 +1428,17 @@
 }
 
 .task4-return-imagery__flash {
+  z-index: 5;
   background: rgba(218, 244, 249, 0.14);
   opacity: 0;
   transition: opacity 110ms ease;
+}
+
+.task4-return-imagery[data-scene="asia-pacific"] .task4-return-imagery__shade,
+.task4-return-imagery[data-scene="china-south-sea"] .task4-return-imagery__shade {
+  background:
+    linear-gradient(180deg, rgba(0, 6, 11, 0.1), transparent 24%, transparent 76%, rgba(0, 8, 13, 0.24)),
+    radial-gradient(circle at 50% 50%, transparent 64%, rgba(0, 5, 9, 0.14));
 }
 
 .task4-return-imagery.is-switching .task4-return-imagery__flash {
@@ -1275,6 +1474,7 @@
 
 .task4-return-imagery__target {
   position: absolute;
+  z-index: 6;
   top: var(--target-y);
   left: var(--target-x);
   display: grid;
@@ -1330,6 +1530,44 @@
 @keyframes task4-arrival-pulse {
   0% { opacity: 0.9; transform: scale(0.55); }
   68%, 100% { opacity: 0; transform: scale(2.4); }
+}
+
+@keyframes task4-return-approach-clock {
+  from { visibility: visible; }
+  to { visibility: visible; }
+}
+
+@keyframes task4-return-globe-approach {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  64% {
+    opacity: 1;
+    transform: translate(-1.5%, 1%) scale(2.35);
+  }
+  82% {
+    opacity: 0.58;
+    transform: translate(-2.4%, 1.5%) scale(3.08);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-2.8%, 1.8%) scale(3.28);
+  }
+}
+
+@keyframes task4-return-map-approach {
+  0%, 62% {
+    opacity: 0;
+    transform: scale(1.1);
+  }
+  84% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .task4-arrival__result {
@@ -1628,6 +1866,19 @@
   transform: translateY(0);
 }
 
+.device.is-task4-s409 .device-panel__task4-story p:first-child {
+  min-height: 3.3em;
+  font-size: calc(var(--font-device, clamp(18px, 1.25vw, 24px)) * 1.11);
+}
+
+.device.is-task4-s409 .device-panel__task4-story p:nth-child(2) {
+  min-height: 3.3em;
+  color: #ffe06d;
+  font-size: calc(var(--font-device, clamp(18px, 1.25vw, 24px)) * 1.2);
+  font-weight: 700;
+  text-shadow: 0 0 14px rgba(255, 208, 75, 0.28);
+}
+
 .device-panel__task4-action {
   display: block;
   width: max-content;
@@ -1665,6 +1916,50 @@
 
 .device-panel__task4-action.is-attention {
   animation: task4-device-action-attention 2s ease-in-out infinite;
+}
+
+.device.is-task4-s409 .device-panel__task4-action,
+.device.is-task4-s410 .device-panel__task4-action {
+  min-width: 10rem;
+  margin-inline: auto;
+  padding: 0.62rem 1.35rem;
+  font-size: calc(var(--font-device, clamp(18px, 1.25vw, 24px)) * 1.11);
+}
+
+.device.is-task4-s410 .device-panel__task4-action {
+  opacity: 0;
+  transform: translateY(0.4rem);
+  transition: opacity 620ms ease, transform 620ms ease;
+}
+
+.device.is-task4-s410 .device-panel__task4-action.is-s410-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.device.is-task4-s410 .device-readout {
+  font-size: 1.14em;
+}
+
+.device.is-task4-s410 .device-readout > div,
+.device.is-task4-s411 .device-readout > div {
+  grid-template-columns: minmax(8.8rem, 42%) minmax(0, 1fr);
+}
+
+.device.is-task4-s410 .device-readout dt,
+.device.is-task4-s410 .device-readout dd {
+  color: #ffe06d;
+  font-size: calc(var(--font-device) * 1.14);
+}
+
+.device-readout > div.is-task4-row-pending {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.device-readout > div.is-task4-row-typing {
+  opacity: 1;
+  visibility: visible;
 }
 
 @keyframes task4-device-action-attention {
@@ -2007,6 +2302,27 @@
   fill: #fff0a6;
   stroke: #d88b2e;
   stroke-width: 2;
+}
+
+.task4-dual-intersection-marker.is-confirming .task4-dual-intersection-marker__halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: task4-intersection-halo-confirm 480ms ease-in-out 3;
+}
+
+.task4-dual-intersection-marker.is-confirming .task4-dual-intersection-marker__core {
+  animation: task4-intersection-core-confirm 480ms ease-in-out 3;
+}
+
+@keyframes task4-intersection-halo-confirm {
+  0% { opacity: 0.3; transform: scale(0.9); }
+  55% { opacity: 1; transform: scale(1.55); }
+  100% { opacity: 0.2; transform: scale(2.05); }
+}
+
+@keyframes task4-intersection-core-confirm {
+  0%, 100% { opacity: 0.78; }
+  50% { opacity: 1; filter: drop-shadow(0 0 10px rgba(255, 225, 128, 0.95)); }
 }
 
 @media (max-width: 900px), (max-height: 720px) {

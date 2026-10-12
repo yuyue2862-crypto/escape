@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,10 @@ Image.MAX_IMAGE_PIXELS = None
 
 WIDTH = 1920
 HEIGHT = 1080
+APPROACH_WIDTH = 1600
+APPROACH_HEIGHT = 900
+APPROACH_FPS = 30
+APPROACH_DURATION = 4.2
 PRD_BOUNDS = (112.5, 21.8, 114.7, 23.6)
 PRD_SOURCE_URL = "https://www.openstreetmap.org/copyright"
 PRD_CITIES = (
@@ -130,6 +135,161 @@ def build_china_south_sea(source: Image.Image, output: Path) -> None:
     overlay.putalpha(25)
     crop = Image.alpha_composite(crop.convert("RGBA"), overlay)
     _save_jpeg(crop, output)
+
+
+def _smoothstep(value: float) -> float:
+    value = max(0.0, min(1.0, value))
+    return value * value * (3 - 2 * value)
+
+
+def _sample_equirectangular(texture: np.ndarray, longitude: np.ndarray, latitude: np.ndarray) -> np.ndarray:
+    """Bilinearly sample an equirectangular Blue Marble texture."""
+    texture_height, texture_width = texture.shape[:2]
+    source_x = ((longitude + math.pi) / (2 * math.pi) * texture_width) % texture_width
+    source_y = np.clip((math.pi / 2 - latitude) / math.pi * (texture_height - 1), 0, texture_height - 1)
+    x0 = np.floor(source_x).astype(np.int32)
+    y0 = np.floor(source_y).astype(np.int32)
+    x1 = (x0 + 1) % texture_width
+    y1 = np.minimum(y0 + 1, texture_height - 1)
+    weight_x = (source_x - x0)[..., None]
+    weight_y = (source_y - y0)[..., None]
+    top = texture[y0, x0] * (1 - weight_x) + texture[y0, x1] * weight_x
+    bottom = texture[y1, x0] * (1 - weight_x) + texture[y1, x1] * weight_x
+    return top * (1 - weight_y) + bottom * weight_y
+
+
+def build_earth_to_china_approach(
+    source: Image.Image,
+    first_scene: Path,
+    second_scene: Path,
+    output: Path,
+    ffmpeg_bin: Path,
+) -> None:
+    """Render a geographically aligned orthographic-to-equirectangular push-in.
+
+    The globe grows until its limb is beyond the viewport. Only then does the
+    projection gradually relax into the exact 60E-149E / 5N-55N second scene.
+    This keeps coastlines moving continuously while avoiding a visible flat-map
+    deformation at the globe edge.
+    """
+    texture_source = source.convert("RGB")
+    texture_source.thumbnail((7200, 3600), Image.Resampling.LANCZOS)
+    texture = np.asarray(texture_source, dtype=np.float32)
+    first = np.asarray(
+        Image.open(first_scene).convert("RGB").resize(
+            (APPROACH_WIDTH, APPROACH_HEIGHT), Image.Resampling.LANCZOS
+        ),
+        dtype=np.float32,
+    )
+    second = np.asarray(
+        Image.open(second_scene).convert("RGB").resize(
+            (APPROACH_WIDTH, APPROACH_HEIGHT), Image.Resampling.LANCZOS
+        ),
+        dtype=np.float32,
+    )
+
+    yy, xx = np.mgrid[0:APPROACH_HEIGHT, 0:APPROACH_WIDTH]
+    center_x = APPROACH_WIDTH / 2
+    center_y = APPROACH_HEIGHT / 2
+    target_longitude = np.deg2rad(60 + (xx + 0.5) / APPROACH_WIDTH * (149 - 60))
+    target_latitude = np.deg2rad(55 - (yy + 0.5) / APPROACH_HEIGHT * (55 - 5))
+    target_vector = np.stack(
+        (
+            np.cos(target_latitude) * np.cos(target_longitude),
+            np.cos(target_latitude) * np.sin(target_longitude),
+            np.sin(target_latitude),
+        ),
+        axis=-1,
+    )
+
+    command = [
+        str(ffmpeg_bin),
+        "-y",
+        "-loglevel", "error",
+        "-f", "rawvideo",
+        "-pix_fmt", "rgb24",
+        "-s", f"{APPROACH_WIDTH}x{APPROACH_HEIGHT}",
+        "-r", str(APPROACH_FPS),
+        "-i", "-",
+        "-an",
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "19",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        str(output),
+    ]
+    process = subprocess.Popen(command, stdin=subprocess.PIPE)
+    frame_count = round(APPROACH_FPS * APPROACH_DURATION)
+    try:
+        for frame_index in range(frame_count):
+            progress = frame_index / (frame_count - 1)
+            camera_progress = _smoothstep(min(1.0, progress / 0.72))
+            longitude0 = math.radians(120 + (104.5 - 120) * camera_progress)
+            latitude0 = math.radians(15 + (30 - 15) * camera_progress)
+            start_radius = APPROACH_WIDTH * 445 / WIDTH
+            end_radius = APPROACH_WIDTH * 1350 / WIDTH
+            radius = start_radius + (end_radius - start_radius) * camera_progress
+
+            nx = (xx + 0.5 - center_x) / radius
+            ny = -(yy + 0.5 - center_y) / radius
+            rho_sq = nx * nx + ny * ny
+            rho = np.sqrt(np.clip(rho_sq, 0, 1))
+            angular_distance = np.arcsin(rho)
+            sin_distance = np.sin(angular_distance)
+            cos_distance = np.cos(angular_distance)
+            safe_rho = np.where(rho == 0, 1, rho)
+            orthographic_latitude = np.arcsin(np.clip(
+                cos_distance * math.sin(latitude0)
+                + ny * sin_distance * math.cos(latitude0) / safe_rho,
+                -1,
+                1,
+            ))
+            orthographic_longitude = longitude0 + np.arctan2(
+                nx * sin_distance,
+                safe_rho * math.cos(latitude0) * cos_distance
+                - ny * math.sin(latitude0) * sin_distance,
+            )
+            orthographic_vector = np.stack(
+                (
+                    np.cos(orthographic_latitude) * np.cos(orthographic_longitude),
+                    np.cos(orthographic_latitude) * np.sin(orthographic_longitude),
+                    np.sin(orthographic_latitude),
+                ),
+                axis=-1,
+            )
+
+            projection_progress = _smoothstep((progress - 0.58) / 0.42)
+            geographic_vector = (
+                orthographic_vector * (1 - projection_progress)
+                + target_vector * projection_progress
+            )
+            geographic_vector /= np.linalg.norm(geographic_vector, axis=-1, keepdims=True)
+            longitude = np.arctan2(geographic_vector[..., 1], geographic_vector[..., 0])
+            latitude = np.arcsin(np.clip(geographic_vector[..., 2], -1, 1))
+            sampled = _sample_equirectangular(texture, longitude, latitude)
+
+            nz = np.sqrt(np.clip(1 - rho_sq, 0, 1))
+            globe_light = np.clip(0.44 + 0.67 * (0.22 * nx + 0.13 * ny + 0.96 * nz), 0.33, 1.1)
+            light = globe_light * (1 - projection_progress) + projection_progress
+            sampled *= light[..., None]
+            sampled[..., 2] *= 1.04 - 0.04 * projection_progress
+
+            valid_globe = (rho_sq <= 1)[..., None]
+            rendered = np.where(valid_globe, sampled, first)
+            intro_blend = _smoothstep(progress / 0.12)
+            rendered = first * (1 - intro_blend) + rendered * intro_blend
+            final_blend = _smoothstep((progress - 0.93) / 0.07)
+            rendered = rendered * (1 - final_blend) + second * final_blend
+            frame = np.clip(rendered, 0, 255).astype(np.uint8)
+            process.stdin.write(frame.tobytes())
+            if frame_index % APPROACH_FPS == 0:
+                print(f"rendered approach frame {frame_index + 1}/{frame_count}")
+    finally:
+        if process.stdin:
+            process.stdin.close()
+    if process.wait() != 0:
+        raise RuntimeError("ffmpeg failed while encoding the Earth-to-China approach video")
 
 
 def _mercator_y(latitude: float) -> float:
@@ -371,6 +531,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bmng-source", type=Path)
     parser.add_argument("--coastline-source", type=Path)
+    parser.add_argument("--ffmpeg-bin", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
     if not args.bmng_source and not args.coastline_source:
@@ -381,6 +542,15 @@ def main() -> None:
             build_asia_pacific_globe(source, args.output_dir / "earth-asia-pacific.jpg")
         with Image.open(args.bmng_source) as source:
             build_china_south_sea(source, args.output_dir / "china-south-sea.jpg")
+        if args.ffmpeg_bin:
+            with Image.open(args.bmng_source) as source:
+                build_earth_to_china_approach(
+                    source,
+                    args.output_dir / "earth-asia-pacific.jpg",
+                    args.output_dir / "china-south-sea.jpg",
+                    args.output_dir / "earth-to-china-south-sea.mp4",
+                    args.ffmpeg_bin,
+                )
     if args.coastline_source:
         coastline_data = extract_prd_coastline(
             args.coastline_source,

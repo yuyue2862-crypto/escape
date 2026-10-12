@@ -1,0 +1,176 @@
+[
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "midVideoTime": 1.888297,
+    "lateVideoTime": 3.843686,
+    "consoleErrors": [],
+    "pageErrors": [],
+    "sceneLog": [
+      {
+        "scene": "global",
+        "time": 1858.3999999999069
+      },
+      {
+        "scene": "south-china",
+        "time": 5870.100000000093
+      },
+      {
+        "scene": "zhuhai-near",
+        "time": 9586.5
+      },
+      {
+        "scene": "asia-pacific",
+        "time": 12757.799999999814
+      },
+      {
+        "scene": "earth-approach",
+        "time": 14981.600000000093
+      },
+      {
+        "scene": "china-south-sea",
+        "time": 19209
+      },
+      {
+        "scene": "pearl-river-delta",
+        "time": 21210
+      },
+      {
+        "scene": "arrived",
+        "time": 23432.100000000093
+      },
+      {
+        "scene": "success",
+        "time": 24233.69999999972
+      }
+    ],
+    "overflow": {
+      "horizontal": false,
+      "vertical": false
+    },
+    "recordButtonVisible": true,
+    "video": {
+      "duration": 4.2,
+      "width": 1600,
+      "height": 900
+    }
+  },
+  {
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "midVideoTime": 1.895317,
+    "lateVideoTime": 3.604026,
+    "consoleErrors": [],
+    "pageErrors": [],
+    "sceneLog": [
+      {
+        "scene": "global",
+        "time": 1700.6999999997206
+      },
+      {
+        "scene": "south-china",
+        "time": 5713.5
+      },
+      {
+        "scene": "zhuhai-near",
+        "time": 9430.19999999972
+      },
+      {
+        "scene": "asia-pacific",
+        "time": 12597.899999999907
+      },
+      {
+        "scene": "earth-approach",
+        "time": 14821.399999999907
+      },
+      {
+        "scene": "china-south-sea",
+        "time": 19044.899999999907
+      },
+      {
+        "scene": "pearl-river-delta",
+        "time": 21045.5
+      },
+      {
+        "scene": "arrived",
+        "time": 23270.399999999907
+      },
+      {
+        "scene": "success",
+        "time": 24071.299999999814
+      }
+    ],
+    "overflow": {
+      "horizontal": false,
+      "vertical": false
+    },
+    "recordButtonVisible": true,
+    "video": {
+      "duration": 4.2,
+      "width": 1600,
+      "height": 900
+    }
+  },
+  {
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "midVideoTime": 1.887915,
+    "lateVideoTime": 3.598257,
+    "consoleErrors": [],
+    "pageErrors": [],
+    "sceneLog": [
+      {
+        "scene": "global",
+        "time": 1698.5
+      },
+      {
+        "scene": "south-china",
+        "time": 5707.0999999996275
+      },
+      {
+        "scene": "zhuhai-near",
+        "time": 9422.099999999627
+      },
+      {
+        "scene": "asia-pacific",
+        "time": 12593.5
+      },
+      {
+        "scene": "earth-approach",
+        "time": 14816.599999999627
+      },
+      {
+        "scene": "china-south-sea",
+        "time": 19041.399999999907
+      },
+      {
+        "scene": "pearl-river-delta",
+        "time": 21042.399999999907
+      },
+      {
+        "scene": "arrived",
+        "time": 23266.799999999814
+      },
+      {
+        "scene": "success",
+        "time": 24068.899999999907
+      }
+    ],
+    "overflow": {
+      "horizontal": false,
+      "vertical": false
+    },
+    "recordButtonVisible": true,
+    "video": {
+      "duration": 4.2,
+      "width": 1600,
+      "height": 900
+    }
+  }
+]
