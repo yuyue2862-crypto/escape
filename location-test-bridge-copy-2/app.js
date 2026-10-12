@@ -4500,7 +4500,14 @@
           <span aria-hidden="true"></span>
           <h2>最终返航记录</h2>
         </header>
-        <ol class="task4-return-archive__achievements" aria-live="polite"></ol>
+        <div class="task4-return-archive__body">
+          <ol class="task4-return-archive__achievements" aria-live="polite"></ol>
+          <div class="task4-return-archive__badge" role="img" aria-label="优秀宇航员徽章">
+            <span class="task4-return-archive__badge-star" aria-hidden="true">★</span>
+            <strong>优秀宇航员！</strong>
+            <span class="task4-return-archive__badge-orbit" aria-hidden="true"></span>
+          </div>
+        </div>
         <dl class="task4-return-archive__result">
           <div><dt>返航目的地</dt><dd></dd></div>
           <div><dt>返航坐标</dt><dd></dd></div>
