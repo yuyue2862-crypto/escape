@@ -1335,20 +1335,36 @@
 .task4-arrival__result {
   position: absolute;
   z-index: 2;
-  right: 0;
-  bottom: clamp(2rem, 5vh, 4rem);
-  left: 0;
+  top: clamp(4rem, 8vh, 6.5rem);
+  right: clamp(2rem, 5vw, 6rem);
   display: grid;
-  justify-items: center;
-  min-height: 7.5rem;
-  text-align: center;
+  justify-items: start;
+  width: min(31rem, calc(100% - 4rem));
+  min-height: 8rem;
+  border: 1px solid rgba(112, 207, 226, 0.22);
+  border-left: 3px solid rgba(112, 207, 226, 0.72);
+  padding: clamp(1.2rem, 2.4vw, 2rem);
+  color: #e8f1ed;
+  background: linear-gradient(135deg, rgba(2, 17, 30, 0.9), rgba(5, 36, 48, 0.72));
+  box-shadow: 0 1rem 3rem rgba(0, 5, 12, 0.34), inset 0 0 2rem rgba(57, 168, 192, 0.05);
+  text-align: left;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.72);
+  opacity: 0;
+  transform: translateY(0.5rem);
+  pointer-events: none;
+  transition: opacity 700ms ease, transform 700ms ease;
+}
+
+.task4-arrival.is-success-visible .task4-arrival__result {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .task4-arrival__result h2 {
   margin: 0;
   color: #f4dfa0;
-  font-size: clamp(2.2rem, 4vw, 4.2rem);
+  font-size: clamp(2rem, 3.4vw, 3.6rem);
   letter-spacing: 0.18em;
   opacity: 0;
   transform: translateY(0.35rem);
@@ -1383,6 +1399,12 @@
   transform: translateY(0.35rem);
   pointer-events: none;
   transition: opacity 600ms ease, transform 600ms ease, border-color 180ms ease;
+}
+
+.task4-arrival.is-success-visible .task4-return-imagery[data-scene="pearl-river-delta"] .task4-return-imagery__shade {
+  background:
+    linear-gradient(90deg, transparent 0 58%, rgba(0, 8, 17, 0.2) 70%, rgba(0, 8, 17, 0.58) 100%),
+    radial-gradient(circle at 50% 50%, transparent 58%, rgba(0, 5, 9, 0.24));
 }
 
 .task4-arrival.is-action-visible .task4-arrival__result button {
@@ -1563,7 +1585,10 @@
 
 @media (max-width: 720px), (max-height: 620px) {
   .task4-arrival__result {
-    bottom: 1rem;
+    top: 1rem;
+    right: 1rem;
+    width: min(25rem, calc(100% - 2rem));
+    padding: 1rem 1.15rem;
   }
 
   .task4-return-imagery__meta {

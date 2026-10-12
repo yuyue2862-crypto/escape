@@ -422,10 +422,10 @@
     }),
     Object.freeze({
       id: "pearl-river-delta",
-      src: "assets/task4/return-journey/pearl-river-delta-map.jpg",
-      label: "珠江三角洲",
-      alt: "OpenStreetMap 标准图层呈现的珠江三角洲地图",
-      credit: "© OpenStreetMap contributors",
+      src: "assets/task4/return-journey/pearl-river-delta-tech-map.png",
+      label: "珠江口 · 粤港澳大湾区",
+      alt: "基于 OpenStreetMap 真实海岸线绘制的深蓝色珠江口与粤港澳大湾区地图",
+      credit: "Map data © OpenStreetMap contributors · ODbL",
     }),
   ]);
 
@@ -1169,6 +1169,37 @@
       completedTasksToRemove: taskId === "task4" ? ["task4"] : [],
     });
     if (!setResumeRequest(task.startCheckpoint)) return;
+    window.location.reload();
+  }
+
+  function isTask4RealTestUnlocked(task4State = progressData?.taskState?.task4) {
+    return task4State?.node === TASK4_PROGRESS_NODE.REAL_TEST;
+  }
+
+  function restartTask4RealTest() {
+    const savedTask4State = progressData?.taskState?.task4;
+    if (!isTask4RealTestUnlocked(savedTask4State)) return;
+
+    const restartedTask4State = {
+      ...savedTask4State,
+      node: TASK4_PROGRESS_NODE.REAL_TEST,
+      awaitingDirectionChoice: false,
+      realTestCompletedCities: [],
+      s409Phase: "idle",
+      s410Phase: "idle",
+      s411Phase: "idle",
+      s412Phase: "idle",
+      s413Phase: "idle",
+      returnStatus: "idle",
+      finalDestination: null,
+      finalCoordinates: null,
+      zhuhaiLocated: false,
+    };
+    const savedProgress = updateCheckpoint("task4-start", {
+      taskState: { task4: restartedTask4State },
+      completedTasksToRemove: ["task4"],
+    });
+    if (!savedProgress || !setResumeRequest("task4-start")) return;
     window.location.reload();
   }
 
@@ -4056,13 +4087,24 @@
   }
 
   function projectTask4ReturnMapPoint(longitude, latitude) {
-    const bounds = { west: 112, south: 21.7, east: 115.47, north: 23.5 };
+    const bounds = { west: 112.5, south: 21.8, east: 114.7, north: 23.6 };
+    const mapSize = { width: 1920, height: 1080, padding: 62 };
     const mercatorY = (value) => Math.log(Math.tan(Math.PI / 4 + value * Math.PI / 360));
     const northY = mercatorY(bounds.north);
     const southY = mercatorY(bounds.south);
+    const longitudeSpan = (bounds.east - bounds.west) * Math.PI / 180;
+    const latitudeSpan = northY - southY;
+    const scale = Math.min(
+      (mapSize.width - mapSize.padding * 2) / longitudeSpan,
+      (mapSize.height - mapSize.padding * 2) / latitudeSpan,
+    );
+    const mapWidth = longitudeSpan * scale;
+    const mapHeight = latitudeSpan * scale;
+    const offsetX = (mapSize.width - mapWidth) / 2;
+    const offsetY = (mapSize.height - mapHeight) / 2;
     return {
-      x: (longitude - bounds.west) / (bounds.east - bounds.west) * 100,
-      y: (northY - mercatorY(latitude)) / (northY - southY) * 100,
+      x: (offsetX + (longitude - bounds.west) * Math.PI / 180 * scale) / mapSize.width * 100,
+      y: (offsetY + (northY - mercatorY(latitude)) * scale) / mapSize.height * 100,
     };
   }
 
@@ -7243,16 +7285,10 @@
 
   function createTask4RealTestProgressItem(task4State) {
     const isActive = task4State?.node === TASK4_PROGRESS_NODE.REAL_TEST;
-    const item = document.createElement("section");
-    item.className = "progress-task4-subtask";
+    const item = createProgressButton("真实定位测试", "restart-task4-real-test", "task4");
+    item.className = "progress-task-option progress-task4-subtask";
     item.classList.toggle("is-active", isActive);
-    item.setAttribute("aria-label", "任务四子任务：真实定位测试");
-
-    const title = document.createElement("p");
-    title.className = "progress-task4-subtask__title";
-    title.textContent = `${isActive ? "●" : "○"} 真实定位测试`;
-
-    item.append(title);
+    item.setAttribute("aria-label", "从北京重新开始真实定位测试");
     return item;
   }
 
@@ -7306,22 +7342,27 @@
         row.className = "progress-task-row";
         row.dataset.taskId = task.id;
 
-        if (isCurrent || (!isCompleted && hasSavedCheckpoint)) {
-          row.textContent = `● ${task.title}`;
+        const hasTask4RealTest = task.id === "task4"
+          && isTask4RealTestUnlocked(progressData.taskState?.task4);
+        if (isCurrent || (!isCompleted && hasSavedCheckpoint) || hasTask4RealTest) {
+          row.textContent = isCompleted ? `✓ ${task.title}` : `● ${task.title}`;
           row.dataset.progressAction = "toggle-current";
           const options = document.createElement("div");
           options.className = "progress-task-options";
           options.hidden = true;
-          const continueButton = createProgressButton(
-            isCurrent ? "继续当前进度" : "继续已保存进度",
-            isCurrent ? "resume" : "resume-task",
-            task.id,
-          );
-          continueButton.className = "progress-task-option";
+          if (isCurrent || (!isCompleted && hasSavedCheckpoint)) {
+            const continueButton = createProgressButton(
+              isCurrent ? "继续当前进度" : "继续已保存进度",
+              isCurrent ? "resume" : "resume-task",
+              task.id,
+            );
+            continueButton.className = "progress-task-option";
+            options.append(continueButton);
+          }
           const replayButton = createProgressButton("从本任务开头重玩", "replay-task", task.id);
           replayButton.className = "progress-task-option";
-          options.append(continueButton, replayButton);
-          if (task.id === "task4") {
+          options.append(replayButton);
+          if (hasTask4RealTest) {
             const realTestProgressItem = createTask4RealTestProgressItem(progressData.taskState?.task4);
             options.append(realTestProgressItem);
           }
@@ -7956,6 +7997,11 @@
 
     if (action === "start-task1" || action === "replay-task") {
       jumpToTask(actionButton.dataset.taskId);
+      return;
+    }
+
+    if (action === "restart-task4-real-test") {
+      restartTask4RealTest();
       return;
     }
 

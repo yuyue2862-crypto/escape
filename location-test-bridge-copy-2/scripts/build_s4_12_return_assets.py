@@ -2,30 +2,37 @@
 """Build the three local image assets used by the S4-12 return sequence.
 
 The first two scenes are derived from NASA's Blue Marble: Next Generation
-August composite. The third scene is assembled from the OpenStreetMap Standard
-tile layer for a fixed Pearl River Delta bounding box.
+August composite. The third scene is rendered from a local, simplified extract
+of OpenStreetMap coastline geometry for the Pearl River Delta.
 """
 
 from __future__ import annotations
 
 import argparse
-import io
+import json
 import math
-import subprocess
-import time
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 
 Image.MAX_IMAGE_PIXELS = None
 
 WIDTH = 1920
 HEIGHT = 1080
-OSM_BOUNDS = (112.0, 21.7, 115.47, 23.5)
-OSM_ZOOM = 9
-USER_AGENT = "EscapeGlobe-Education/1.0 (local classroom asset build)"
+PRD_BOUNDS = (112.5, 21.8, 114.7, 23.6)
+PRD_SOURCE_URL = "https://www.openstreetmap.org/copyright"
+PRD_CITIES = (
+    {"name": "广州", "longitude": 113.2644, "latitude": 23.1291, "offset": (-88, -42)},
+    {"name": "东莞", "longitude": 113.7518, "latitude": 23.0207, "offset": (18, -34)},
+    {"name": "深圳", "longitude": 114.0579, "latitude": 22.5431, "offset": (18, -34)},
+    {"name": "香港", "longitude": 114.1694, "latitude": 22.3193, "offset": (18, 10)},
+    {"name": "澳门", "longitude": 113.5439, "latitude": 22.1987, "offset": (-86, 12)},
+    {"name": "中山", "longitude": 113.3926, "latitude": 22.5176, "offset": (-84, -38)},
+    {"name": "江门", "longitude": 113.0815, "latitude": 22.5789, "offset": (-82, 12)},
+)
+PRD_TARGET = {"name": "珠海", "longitude": 113.58, "latitude": 22.27}
 
 
 def _save_jpeg(image: Image.Image, path: Path) -> None:
@@ -125,90 +132,264 @@ def build_china_south_sea(source: Image.Image, output: Path) -> None:
     _save_jpeg(crop, output)
 
 
-def _longitude_to_world_x(longitude: float, zoom: int) -> float:
-    return (longitude + 180) / 360 * (2**zoom) * 256
-
-
-def _latitude_to_world_y(latitude: float, zoom: int) -> float:
+def _mercator_y(latitude: float) -> float:
     latitude = max(min(latitude, 85.05112878), -85.05112878)
-    radians = math.radians(latitude)
-    return (1 - math.asinh(math.tan(radians)) / math.pi) / 2 * (2**zoom) * 256
+    return math.degrees(math.log(math.tan(math.pi / 4 + math.radians(latitude) / 2)))
 
 
-def _load_osm_tile(x: int, y: int, zoom: int, cache_dir: Path) -> Image.Image:
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = cache_dir / f"{zoom}-{x}-{y}.png"
-    if cache_path.exists():
-        try:
-            return Image.open(cache_path).convert("RGB")
-        except OSError:
-            cache_path.unlink()
-    url = f"https://tile.openstreetmap.org/{zoom}/{x}/{y}.png"
-    curl = subprocess.run(
-        [
-            "curl",
-            "-sS",
-            "-L",
-            "--fail",
-            "--retry",
-            "4",
-            "--retry-all-errors",
-            "--connect-timeout",
-            "15",
-            "--max-time",
-            "45",
-            "-A",
-            USER_AGENT,
-            url,
-        ],
-        check=False,
-        capture_output=True,
+def _point_line_distance(point, start, end) -> float:
+    px, py = point
+    sx, sy = start
+    ex, ey = end
+    dx = ex - sx
+    dy = ey - sy
+    if dx == 0 and dy == 0:
+        return math.hypot(px - sx, py - sy)
+    position = max(0, min(1, ((px - sx) * dx + (py - sy) * dy) / (dx * dx + dy * dy)))
+    return math.hypot(px - (sx + position * dx), py - (sy + position * dy))
+
+
+def _simplify_path(points, tolerance: float):
+    if len(points) <= 2:
+        return points
+    retained = {0, len(points) - 1}
+    pending = [(0, len(points) - 1)]
+    while pending:
+        start_index, end_index = pending.pop()
+        farthest_index = 0
+        farthest_distance = 0.0
+        for index in range(start_index + 1, end_index):
+            distance = _point_line_distance(points[index], points[start_index], points[end_index])
+            if distance > farthest_distance:
+                farthest_index = index
+                farthest_distance = distance
+        if farthest_distance <= tolerance:
+            continue
+        retained.add(farthest_index)
+        pending.append((start_index, farthest_index))
+        pending.append((farthest_index, end_index))
+    return [points[index] for index in sorted(retained)]
+
+
+def extract_prd_coastline(source: Path, output: Path) -> dict:
+    raw = json.loads(source.read_text(encoding="utf-8"))
+    paths = []
+    for element in raw.get("elements", []):
+        geometry = element.get("geometry") or []
+        sections = []
+        section = []
+        for point in geometry:
+            if point is None:
+                if len(section) >= 2:
+                    sections.append(section)
+                section = []
+                continue
+            section.append((float(point["lon"]), float(point["lat"])))
+        if len(section) >= 2:
+            sections.append(section)
+        for points in sections:
+            simplified = _simplify_path(points, 0.00035)
+            paths.append([[round(longitude, 6), round(latitude, 6)] for longitude, latitude in simplified])
+    result = {
+        "source": "OpenStreetMap contributors",
+        "sourceUrl": PRD_SOURCE_URL,
+        "license": "Open Database License (ODbL)",
+        "retrievedFrom": "Overpass API",
+        "osmBaseTimestamp": raw.get("osm3s", {}).get("timestamp_osm_base"),
+        "bounds": {"west": PRD_BOUNDS[0], "south": PRD_BOUNDS[1], "east": PRD_BOUNDS[2], "north": PRD_BOUNDS[3]},
+        "coastlines": paths,
+    }
+    output.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return result
+
+
+def _create_prd_projection(bounds, width: int, height: int, padding: int = 62):
+    west, south, east, north = bounds
+    mercator_south = _mercator_y(south)
+    mercator_north = _mercator_y(north)
+    scale = min(
+        (width - padding * 2) / (east - west),
+        (height - padding * 2) / (mercator_north - mercator_south),
     )
-    if curl.returncode == 0:
-        image = Image.open(io.BytesIO(curl.stdout)).convert("RGB")
-        cache_path.write_bytes(curl.stdout)
-        return image
-    raise RuntimeError(f"Unable to download OSM tile {zoom}/{x}/{y}: {curl.stderr.decode('utf-8', 'replace')}")
+    map_width = (east - west) * scale
+    map_height = (mercator_north - mercator_south) * scale
+    offset_x = (width - map_width) / 2
+    offset_y = (height - map_height) / 2
+
+    def project(longitude: float, latitude: float):
+        return (
+            offset_x + (longitude - west) * scale,
+            offset_y + (mercator_north - _mercator_y(latitude)) * scale,
+        )
+
+    return project, (offset_x, offset_y, offset_x + map_width, offset_y + map_height)
 
 
-def build_pearl_river_delta(output: Path, cache_dir: Path) -> None:
-    west, south, east, north = OSM_BOUNDS
-    left_world = _longitude_to_world_x(west, OSM_ZOOM)
-    right_world = _longitude_to_world_x(east, OSM_ZOOM)
-    top_world = _latitude_to_world_y(north, OSM_ZOOM)
-    bottom_world = _latitude_to_world_y(south, OSM_ZOOM)
-    first_x = math.floor(left_world / 256)
-    last_x = math.floor((right_world - 1) / 256)
-    first_y = math.floor(top_world / 256)
-    last_y = math.floor((bottom_world - 1) / 256)
-    mosaic = Image.new("RGB", ((last_x - first_x + 1) * 256, (last_y - first_y + 1) * 256))
-    for tile_y in range(first_y, last_y + 1):
-        for tile_x in range(first_x, last_x + 1):
-            tile = _load_osm_tile(tile_x, tile_y, OSM_ZOOM, cache_dir)
-            mosaic.paste(tile, ((tile_x - first_x) * 256, (tile_y - first_y) * 256))
-            time.sleep(0.08)
-    crop = mosaic.crop((
-        round(left_world - first_x * 256),
-        round(top_world - first_y * 256),
-        round(right_world - first_x * 256),
-        round(bottom_world - first_y * 256),
-    ))
-    crop = crop.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
-    _save_jpeg(crop, output)
+def _load_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont:
+    candidates = [
+        Path("C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc"),
+        Path("/System/Library/Fonts/PingFang.ttc"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    ]
+    for font_path in candidates:
+        if font_path.exists():
+            return ImageFont.truetype(str(font_path), size)
+    return ImageFont.load_default(size=size)
+
+
+def _build_land_mask(paths, project, frame) -> Image.Image:
+    left, top, right, bottom = frame
+    mask = Image.new("L", (WIDTH, HEIGHT), 0)
+    pixels = mask.load()
+    projected_segments = []
+    for path in paths:
+        for first, second in zip(path, path[1:]):
+            longitude1, latitude1 = first
+            longitude2, latitude2 = second
+            x1, y1 = project(longitude1, latitude1)
+            x2, y2 = project(longitude2, latitude2)
+            if y1 == y2:
+                continue
+            projected_segments.append((x1, y1, x2, y2, latitude2 > latitude1))
+
+    first_row = max(0, math.floor(top))
+    last_row = min(HEIGHT - 1, math.ceil(bottom))
+    left_column = max(0, math.floor(left))
+    right_column = min(WIDTH - 1, math.ceil(right))
+    _, mainland_cutoff_y = project(PRD_BOUNDS[0], 22.78)
+    for y in range(first_row, last_row + 1):
+        sample_y = y + 0.5
+        crossings = []
+        for x1, y1, x2, y2, moves_north in projected_segments:
+            if not ((y1 <= sample_y < y2) or (y2 <= sample_y < y1)):
+                continue
+            ratio = (sample_y - y1) / (y2 - y1)
+            crossings.append((x1 + (x2 - x1) * ratio, moves_north))
+        if not crossings:
+            if y <= mainland_cutoff_y:
+                for x in range(left_column, right_column + 1):
+                    pixels[x, y] = 255
+            continue
+        crossings.sort(key=lambda crossing: crossing[0])
+        land = crossings[0][1]
+        cursor = left_column
+        for crossing_x, moves_north in crossings:
+            crossing_column = max(left_column, min(right_column, round(crossing_x)))
+            if land:
+                for x in range(cursor, crossing_column + 1):
+                    pixels[x, y] = 255
+            land = not moves_north
+            cursor = crossing_column
+        if land:
+            for x in range(cursor, right_column + 1):
+                pixels[x, y] = 255
+    return mask
+
+
+def build_pearl_river_delta_tech_map(coastline_data: dict, output: Path) -> None:
+    project, frame = _create_prd_projection(PRD_BOUNDS, WIDTH, HEIGHT)
+    yy, xx = np.mgrid[0:HEIGHT, 0:WIDTH]
+    distance = np.sqrt(((xx - WIDTH * 0.52) / WIDTH) ** 2 + ((yy - HEIGHT * 0.48) / HEIGHT) ** 2)
+    background = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
+    background[..., 0] = np.clip(3 + yy / HEIGHT * 3, 0, 255)
+    background[..., 1] = np.clip(16 + yy / HEIGHT * 12 - distance * 10, 5, 255)
+    background[..., 2] = np.clip(30 + yy / HEIGHT * 20 - distance * 12, 12, 255)
+    canvas = Image.fromarray(background, "RGB").convert("RGBA")
+
+    coastlines = coastline_data["coastlines"]
+    land_mask = _build_land_mask(coastlines, project, frame)
+    land_layer = Image.new("RGBA", (WIDTH, HEIGHT), (18, 55, 69, 255))
+    land_texture = np.asarray(land_layer).copy()
+    land_texture[..., 1] += np.clip((HEIGHT - yy) / HEIGHT * 8, 0, 8).astype(np.uint8)
+    land_layer = Image.fromarray(land_texture, "RGBA")
+    land_layer.putalpha(land_mask)
+    canvas.alpha_composite(land_layer)
+
+    grid = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    grid_draw = ImageDraw.Draw(grid)
+    for longitude in (112.5, 113.0, 113.5, 114.0, 114.5):
+        x, _ = project(longitude, PRD_BOUNDS[1])
+        grid_draw.line((x, frame[1], x, frame[3]), fill=(94, 196, 218, 24), width=1)
+    for latitude in (22.0, 22.5, 23.0, 23.5):
+        _, y = project(PRD_BOUNDS[0], latitude)
+        grid_draw.line((frame[0], y, frame[2], y), fill=(94, 196, 218, 24), width=1)
+    canvas.alpha_composite(grid)
+
+    glow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow)
+    line_layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    line_draw = ImageDraw.Draw(line_layer)
+    for path in coastlines:
+        projected = [project(longitude, latitude) for longitude, latitude in path]
+        if len(projected) < 2:
+            continue
+        glow_draw.line(projected, fill=(69, 215, 242, 92), width=7, joint="curve")
+        line_draw.line(projected, fill=(105, 224, 244, 218), width=2, joint="curve")
+    glow = glow.filter(ImageFilter.GaussianBlur(5))
+    canvas.alpha_composite(glow)
+    canvas.alpha_composite(line_layer)
+
+    hud = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    hud_draw = ImageDraw.Draw(hud)
+    target_x, target_y = project(PRD_TARGET["longitude"], PRD_TARGET["latitude"])
+    for radius, alpha, width in ((72, 76, 2), (122, 44, 2), (190, 24, 1)):
+        hud_draw.arc(
+            (target_x - radius, target_y - radius, target_x + radius, target_y + radius),
+            198,
+            512,
+            fill=(102, 226, 240, alpha),
+            width=width,
+        )
+    hud_draw.line((target_x - 250, target_y, target_x - 64, target_y), fill=(95, 213, 232, 36), width=1)
+    hud_draw.line((target_x + 64, target_y, target_x + 250, target_y), fill=(95, 213, 232, 36), width=1)
+    hud_draw.line((target_x, target_y - 210, target_x, target_y - 64), fill=(95, 213, 232, 36), width=1)
+    canvas.alpha_composite(hud)
+
+    labels = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    label_draw = ImageDraw.Draw(labels)
+    label_font = _load_font(25)
+    city_font = _load_font(30, bold=True)
+    for city in PRD_CITIES:
+        x, y = project(city["longitude"], city["latitude"])
+        label_draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(118, 224, 241, 220))
+        label_draw.ellipse((x - 10, y - 10, x + 10, y + 10), outline=(96, 207, 228, 70), width=1)
+        offset_x, offset_y = city["offset"]
+        label_draw.text((x + offset_x, y + offset_y), city["name"], font=label_font, fill=(191, 231, 237, 205))
+
+    title_font = _load_font(40, bold=True)
+    small_font = _load_font(19)
+    label_draw.text((74, 70), "珠江口 · 粤港澳大湾区", font=title_font, fill=(210, 242, 246, 235))
+    label_draw.text((77, 126), "RETURN NAVIGATION / FINAL APPROACH", font=small_font, fill=(94, 190, 209, 150))
+    label_draw.line((76, 158, 342, 158), fill=(94, 190, 209, 80), width=1)
+    label_draw.text((76, 174), "22.27°N  113.58°E", font=city_font, fill=(224, 201, 120, 220))
+    canvas.alpha_composite(labels)
+
+    canvas.convert("RGB").save(output, "PNG", optimize=True)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bmng-source", required=True, type=Path)
+    parser.add_argument("--bmng-source", type=Path)
+    parser.add_argument("--coastline-source", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
-    parser.add_argument("--tile-cache", type=Path, default=Path("/private/tmp/s4-12-osm-tiles"))
     args = parser.parse_args()
+    if not args.bmng_source and not args.coastline_source:
+        parser.error("provide --bmng-source and/or --coastline-source")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    with Image.open(args.bmng_source) as source:
-        build_asia_pacific_globe(source, args.output_dir / "earth-asia-pacific.jpg")
-    with Image.open(args.bmng_source) as source:
-        build_china_south_sea(source, args.output_dir / "china-south-sea.jpg")
-    build_pearl_river_delta(args.output_dir / "pearl-river-delta-map.jpg", args.tile_cache)
+    if args.bmng_source:
+        with Image.open(args.bmng_source) as source:
+            build_asia_pacific_globe(source, args.output_dir / "earth-asia-pacific.jpg")
+        with Image.open(args.bmng_source) as source:
+            build_china_south_sea(source, args.output_dir / "china-south-sea.jpg")
+    if args.coastline_source:
+        coastline_data = extract_prd_coastline(
+            args.coastline_source,
+            args.output_dir / "pearl-river-delta-osm-coastline.json",
+        )
+        build_pearl_river_delta_tech_map(
+            coastline_data,
+            args.output_dir / "pearl-river-delta-tech-map.png",
+        )
 
 
 if __name__ == "__main__":
