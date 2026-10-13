@@ -1,0 +1,482 @@
+[
+  {
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "sequence": [
+      {
+        "scene": "global",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "imagery": null,
+        "image": null,
+        "target": null,
+        "targetVisible": false
+      },
+      {
+        "scene": "asia-pacific",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "width": 1280,
+          "height": 720
+        },
+        "image": {
+          "left": -3,
+          "top": -1,
+          "right": 1283,
+          "bottom": 721,
+          "width": 1285,
+          "height": 723
+        },
+        "target": {
+          "left": 494,
+          "top": 465,
+          "right": 671,
+          "bottom": 521,
+          "width": 177,
+          "height": 56
+        },
+        "targetVisible": false
+      },
+      {
+        "scene": "china-south-sea",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "width": 1280,
+          "height": 720
+        },
+        "image": {
+          "left": -3,
+          "top": -1,
+          "right": 1283,
+          "bottom": 721,
+          "width": 1285,
+          "height": 723
+        },
+        "target": {
+          "left": 494,
+          "top": 465,
+          "right": 671,
+          "bottom": 521,
+          "width": 177,
+          "height": 56
+        },
+        "targetVisible": false
+      },
+      {
+        "scene": "pearl-river-delta",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "width": 1280,
+          "height": 720
+        },
+        "image": {
+          "left": -3,
+          "top": -1,
+          "right": 1283,
+          "bottom": 721,
+          "width": 1285,
+          "height": 723
+        },
+        "target": {
+          "left": 494,
+          "top": 465,
+          "right": 671,
+          "bottom": 521,
+          "width": 177,
+          "height": 56
+        },
+        "targetVisible": true
+      },
+      {
+        "scene": "success",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "width": 1280,
+          "height": 720
+        },
+        "image": {
+          "left": -3,
+          "top": -1,
+          "right": 1283,
+          "bottom": 721,
+          "width": 1285,
+          "height": 723
+        },
+        "target": {
+          "left": 494,
+          "top": 465,
+          "right": 671,
+          "bottom": 521,
+          "width": 177,
+          "height": 56
+        },
+        "targetVisible": true
+      }
+    ],
+    "archiveOpened": true,
+    "consoleErrors": [],
+    "pageErrors": []
+  },
+  {
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "sequence": [
+      {
+        "scene": "global",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1366,
+          "height": 768
+        },
+        "imagery": null,
+        "image": null,
+        "target": null,
+        "targetVisible": false
+      },
+      {
+        "scene": "asia-pacific",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1366,
+          "height": 768
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1366,
+          "bottom": 768,
+          "width": 1366,
+          "height": 768
+        },
+        "image": {
+          "left": -3,
+          "top": -2,
+          "right": 1369,
+          "bottom": 770,
+          "width": 1371,
+          "height": 771
+        },
+        "target": {
+          "left": 528,
+          "top": 496,
+          "right": 716,
+          "bottom": 555,
+          "width": 188,
+          "height": 59
+        },
+        "targetVisible": false
+      },
+      {
+        "scene": "china-south-sea",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1366,
+          "height": 768
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1366,
+          "bottom": 768,
+          "width": 1366,
+          "height": 768
+        },
+        "image": {
+          "left": -3,
+          "top": -2,
+          "right": 1369,
+          "bottom": 770,
+          "width": 1371,
+          "height": 771
+        },
+        "target": {
+          "left": 528,
+          "top": 496,
+          "right": 716,
+          "bottom": 555,
+          "width": 188,
+          "height": 59
+        },
+        "targetVisible": false
+      },
+      {
+        "scene": "pearl-river-delta",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1366,
+          "height": 768
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1366,
+          "bottom": 768,
+          "width": 1366,
+          "height": 768
+        },
+        "image": {
+          "left": -3,
+          "top": -2,
+          "right": 1369,
+          "bottom": 770,
+          "width": 1371,
+          "height": 771
+        },
+        "target": {
+          "left": 528,
+          "top": 496,
+          "right": 716,
+          "bottom": 555,
+          "width": 188,
+          "height": 59
+        },
+        "targetVisible": true
+      },
+      {
+        "scene": "success",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1366,
+          "height": 768
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1366,
+          "bottom": 768,
+          "width": 1366,
+          "height": 768
+        },
+        "image": {
+          "left": -3,
+          "top": -2,
+          "right": 1369,
+          "bottom": 770,
+          "width": 1371,
+          "height": 771
+        },
+        "target": {
+          "left": 528,
+          "top": 496,
+          "right": 716,
+          "bottom": 555,
+          "width": 188,
+          "height": 59
+        },
+        "targetVisible": true
+      }
+    ],
+    "archiveOpened": true,
+    "consoleErrors": [],
+    "pageErrors": []
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "sequence": [
+      {
+        "scene": "global",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "imagery": null,
+        "image": null,
+        "target": null,
+        "targetVisible": false
+      },
+      {
+        "scene": "asia-pacific",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "image": {
+          "left": -4,
+          "top": -2,
+          "right": 1924,
+          "bottom": 1082,
+          "width": 1928,
+          "height": 1084
+        },
+        "target": {
+          "left": 771,
+          "top": 708,
+          "right": 977,
+          "bottom": 771,
+          "width": 206,
+          "height": 63
+        },
+        "targetVisible": false
+      },
+      {
+        "scene": "china-south-sea",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "image": {
+          "left": -4,
+          "top": -2,
+          "right": 1924,
+          "bottom": 1082,
+          "width": 1928,
+          "height": 1084
+        },
+        "target": {
+          "left": 771,
+          "top": 708,
+          "right": 977,
+          "bottom": 771,
+          "width": 206,
+          "height": 63
+        },
+        "targetVisible": false
+      },
+      {
+        "scene": "pearl-river-delta",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "image": {
+          "left": -4,
+          "top": -2,
+          "right": 1924,
+          "bottom": 1082,
+          "width": 1928,
+          "height": 1084
+        },
+        "target": {
+          "left": 771,
+          "top": 708,
+          "right": 977,
+          "bottom": 771,
+          "width": 206,
+          "height": 63
+        },
+        "targetVisible": true
+      },
+      {
+        "scene": "success",
+        "overflowX": false,
+        "overflowY": false,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "imagery": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "image": {
+          "left": -4,
+          "top": -2,
+          "right": 1924,
+          "bottom": 1082,
+          "width": 1928,
+          "height": 1084
+        },
+        "target": {
+          "left": 771,
+          "top": 708,
+          "right": 977,
+          "bottom": 771,
+          "width": 206,
+          "height": 63
+        },
+        "targetVisible": true
+      }
+    ],
+    "archiveOpened": true,
+    "consoleErrors": [],
+    "pageErrors": []
+  }
+]
