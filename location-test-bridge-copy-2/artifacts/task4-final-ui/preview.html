@@ -20,13 +20,27 @@
   <div id="note" class="preview-note"></div>
   <script src="../../task4/natural-earth-land-data.js"></script>
   <script src="../../task4/real-earth-globe.js"></script>
+  <script src="../../task4/task4-flow.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode") || "globe";
     const stage = document.querySelector("#stage");
     const note = document.querySelector("#note");
 
-    if (mode === "archive") {
+    if (mode === "flow-test") {
+      stage.innerHTML = `<div id="mount" class="task4-globe-mount"></div>`;
+      const flow = window.Task4Flow.create({
+        stage,
+        globeMount: document.querySelector("#mount"),
+        taskIds: ["beijing", "rio-de-janeiro"],
+      });
+      flow.initialize();
+      flow.start({ taskIds: ["beijing", "rio-de-janeiro"], presentation: "city-test" });
+      const cityMax = flow.setGlobeScale(4);
+      flow.start({ taskIds: ["zhuhai"], presentation: "return-home" });
+      const returnHomeMax = flow.setGlobeScale(4);
+      note.textContent = `阶段上限验证 · 城市测试 ${cityMax} / 珠海定位 ${returnHomeMax}`;
+    } else if (mode === "archive") {
       stage.classList.add("is-s413-archive");
       stage.innerHTML = `
         <section class="task4-return-archive is-visible is-complete" aria-label="最终返航记录">
@@ -52,6 +66,14 @@
             </dl>
           </div>
         </section>`;
+      if (params.get("static") === "1") {
+        const badge = stage.querySelector(".task4-return-archive__badge");
+        badge.style.animation = "none";
+        badge.style.opacity = "1";
+        badge.style.visibility = "visible";
+        badge.style.transform = "translateY(-50%) rotate(-8deg) scale(1)";
+        stage.querySelector(".task4-return-archive__badge-orbit").style.animation = "none";
+      }
       note.textContent = "最终返航记录 · 印章验收";
     } else {
       stage.innerHTML = `

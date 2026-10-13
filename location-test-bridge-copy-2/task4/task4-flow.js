@@ -12,6 +12,8 @@
   const TARGET_TYPING_SOUND_PEAK = 0.028;
   const CITY_TEST_GLOBE_FADE_DURATION = 2000;
   const CITY_TEST_GLOBE_SETTLE_DURATION = 1000;
+  const CITY_TEST_MAX_GLOBE_SCALE = 2;
+  const RETURN_HOME_MAX_GLOBE_SCALE = 4;
   const RETURN_HOME_TYPING_INTERVAL = 44;
   const RETURN_HOME_LINE_DELAY = 240;
   const NEXT_TASK_DELAY = 1400;
@@ -90,6 +92,12 @@
     };
 
     const getCurrentTask = () => locationTasks[currentTaskIndex];
+
+    const syncGlobeScaleLimit = (activeGlobe) => activeGlobe.setMaxScale(
+      presentationMode === "return-home"
+        ? RETURN_HOME_MAX_GLOBE_SCALE
+        : CITY_TEST_MAX_GLOBE_SCALE,
+    );
 
     const stopNextTaskTimer = () => {
       if (nextTaskTimer !== null) window.clearTimeout(nextTaskTimer);
@@ -422,6 +430,7 @@
           locationTasks = nextTasks;
         }
         presentationMode = presentation === "return-home" ? "return-home" : "city-test";
+        syncGlobeScaleLimit(activeGlobe);
         const requestedTaskIndex = taskId
           ? locationTasks.findIndex((task) => task.id === taskId)
           : -1;
@@ -452,6 +461,7 @@
         locationTasks = resolveLocationTasks(["zhuhai"]);
         currentTaskIndex = 0;
         presentationMode = "return-home";
+        syncGlobeScaleLimit(activeGlobe);
         renderTaskInstruction();
         activeGlobe.clearSelection();
         activeGlobe.clearMarkers();

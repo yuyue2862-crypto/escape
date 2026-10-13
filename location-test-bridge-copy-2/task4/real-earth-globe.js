@@ -5,7 +5,8 @@
   const DEFAULT_VIEW = Object.freeze({ latitude: 0, longitude: 0, rotation: 0 });
   const VALID_MODES = new Set(["idle", "view", "rotate", "select", "interactive"]);
   const MIN_SCALE = 0.6;
-  const MAX_SCALE = 2;
+  const DEFAULT_MAX_SCALE = 2;
+  const MAX_CONFIGURABLE_SCALE = 8;
   const LATITUDE_LABEL_VALUES = Object.freeze([-90, -80, -60, -40, -20, 0, 20, 40, 60, 80, 90]);
   const LATITUDE_LABEL_MERIDIANS = Object.freeze([0, 180]);
   // -180 and 180 are the same meridian, so it is intentionally represented once.
@@ -104,6 +105,7 @@
     let destroyed = false;
     let mode = "idle";
     let scale = 1;
+    let maxScale = DEFAULT_MAX_SCALE;
     let view = { ...DEFAULT_VIEW };
     let basis = createBasis(view);
     let svg = null;
@@ -119,6 +121,7 @@
     const assertActive = () => {
       if (destroyed) throw new Error("Task four globe has been destroyed.");
     };
+    const getOverlayScale = () => Math.min(1, DEFAULT_MAX_SCALE / scale);
     const element = (tag, attributes = {}) => {
       const node = mount.ownerDocument.createElementNS(SVG_NAMESPACE, tag);
       Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
@@ -372,7 +375,7 @@
       const point = selectedCoordinate ? projectCoordinate(selectedCoordinate) : null;
       selectionNode.setAttribute("visibility", point?.visible ? "visible" : "hidden");
       selectionNode.setAttribute("aria-hidden", String(!point?.visible));
-      if (point) selectionNode.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      if (point) selectionNode.setAttribute("transform", `translate(${point.x} ${point.y}) scale(${getOverlayScale()})`);
     }
 
     function renderMarkers() {
@@ -382,7 +385,7 @@
         const point = projectCoordinate(marker);
         node.setAttribute("visibility", point.visible ? "visible" : "hidden");
         node.setAttribute("aria-hidden", String(!point.visible));
-        node.setAttribute("transform", `translate(${point.x} ${point.y})`);
+        node.setAttribute("transform", `translate(${point.x} ${point.y}) scale(${getOverlayScale()})`);
       });
     }
 
@@ -422,7 +425,7 @@
         const visible = showOnLimb ? point.depth >= -1e-12 : point.depth > LABEL_MINIMUM_DEPTH;
         node.setAttribute("visibility", visible ? "visible" : "hidden");
         node.setAttribute("aria-hidden", String(!visible));
-        node.setAttribute("transform", `translate(${point.x} ${point.y})`);
+        node.setAttribute("transform", `translate(${point.x} ${point.y}) scale(${getOverlayScale()})`);
       });
     }
 
@@ -502,10 +505,22 @@
       assertActive();
       const value = Number(nextScale);
       if (!Number.isFinite(value)) throw new TypeError("Globe scale must be finite.");
-      scale = clamp(value, MIN_SCALE, MAX_SCALE);
+      scale = clamp(value, MIN_SCALE, maxScale);
       // Scale the whole SVG; getScreenCTM() then inverts the same transform for picking.
       if (svg) svg.style.transform = `scale(${scale})`;
+      // Beyond the original 2x limit, keep labels and points near their former
+      // screen size so geography enlarges without oversized classroom labels.
+      renderCoordinateLabels();
+      renderMarkers();
+      renderSelection();
       return scale;
+    }
+
+    function setMaxScale(nextMaxScale) {
+      assertActive();
+      maxScale = numberInRange(nextMaxScale, MIN_SCALE, MAX_CONFIGURABLE_SCALE, "maximum scale");
+      // Re-apply the current scale so lowering a stage-specific limit remains smooth and valid.
+      return setScale(scale);
     }
 
     function wheelZoom(event) {
@@ -753,6 +768,7 @@
 
       setView,
       setScale,
+      setMaxScale,
       getScale() {
         return scale;
       },
