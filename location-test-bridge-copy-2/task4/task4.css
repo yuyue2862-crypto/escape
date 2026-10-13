@@ -430,6 +430,30 @@
   transform: translate(-50%, -50%);
 }
 
+/* The city-test HUD waits until the globe has settled. This state is only
+   applied by the Beijing/Rio entry sequence, never by the return-home flow. */
+.task4-stage.is-real-test-intro .task4-globe-mount {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.85);
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+
+.task4-stage.is-real-test-intro.is-real-test-globe-visible .task4-globe-mount {
+  animation: task4-city-test-globe-reveal 2000ms ease-out both;
+}
+
+@keyframes task4-city-test-globe-reveal {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 .task4-real-earth {
   display: block;
   width: 100%;

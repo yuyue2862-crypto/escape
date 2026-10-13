@@ -2,8 +2,9 @@
 """Build the three local image assets used by the S4-12 return sequence.
 
 The first two scenes are derived from NASA's Blue Marble: Next Generation
-August composite. The third scene is rendered from a local, simplified extract
-of OpenStreetMap coastline geometry for the Pearl River Delta.
+August composite. The third scene is rendered from local, simplified extracts
+of OpenStreetMap coastline, river, and administrative-boundary geometry for the
+Pearl River Delta.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 
 Image.MAX_IMAGE_PIXELS = None
@@ -28,6 +29,7 @@ APPROACH_FPS = 30
 APPROACH_DURATION = 4.2
 PRD_BOUNDS = (112.5, 21.8, 114.7, 23.6)
 PRD_SOURCE_URL = "https://www.openstreetmap.org/copyright"
+PRD_OVERPASS_QUERY_URL = "https://overpass-turbo.eu/"
 PRD_CITIES = (
     {"name": "广州", "longitude": 113.2644, "latitude": 23.1291, "offset": (-88, -42)},
     {"name": "东莞", "longitude": 113.7518, "latitude": 23.0207, "offset": (18, -34)},
@@ -38,6 +40,68 @@ PRD_CITIES = (
     {"name": "江门", "longitude": 113.0815, "latitude": 22.5789, "offset": (-82, 12)},
 )
 PRD_TARGET = {"name": "珠海", "longitude": 113.58, "latitude": 22.27}
+PRD_BOUNDARY_NAMES = {
+    3287346: "广州",
+    3463901: "江门",
+    3464319: "东莞",
+    3464353: "深圳",
+    3464719: "佛山",
+    3464829: "珠海",
+    3464878: "中山",
+    20044132: "香港",
+}
+PRD_PRIMARY_RIVERS = {
+    "西江",
+    "北江",
+    "东江",
+    "东江北干流",
+    "西江干流水道",
+    "西海水道",
+    "磨刀门水道",
+    "北江干流水道",
+    "顺德水道",
+    "沙湾水道",
+}
+PRD_OFFICIALLY_LISTED_RIVERS = {
+    "东江北干流",
+    "东江南支流",
+    "东莞水道",
+    "佛山水道",
+    "顺德水道",
+    "沙湾水道",
+    "洪奇沥水道",
+    "东海水道",
+    "容桂水道",
+    "鸡鸦水道",
+    "小榄水道",
+    "横门水道",
+    "磨刀门水道",
+    "鸡啼门水道",
+    "虎跳门水道",
+    "珠江西航道",
+    "前航道",
+    "后航道",
+}
+PRD_RIVER_LABELS = (
+    {
+        "name": "西江",
+        "osmWayId": 237902657,
+        "anchor": (112.706088, 23.170921),
+        "offset": (10, -26),
+    },
+    {
+        "name": "北江",
+        "osmWayId": 48993221,
+        "anchor": (112.894269, 23.463100),
+        "offset": (12, -24),
+    },
+    {
+        "name": "东江北干流",
+        "osmWayId": 51812591,
+        "anchor": (113.735090, 23.142246),
+        "offset": (12, -25),
+    },
+)
 
 
 def _save_jpeg(image: Image.Image, path: Path) -> None:
@@ -363,6 +427,113 @@ def extract_prd_coastline(source: Path, output: Path) -> dict:
     return result
 
 
+def _split_geometry(geometry) -> list[list[tuple[float, float]]]:
+    sections = []
+    section = []
+    for point in geometry or []:
+        if point is None:
+            if len(section) >= 2:
+                sections.append(section)
+            section = []
+            continue
+        section.append((float(point["lon"]), float(point["lat"])))
+    if len(section) >= 2:
+        sections.append(section)
+    return sections
+
+
+def extract_prd_geography(river_sources: list[Path], boundary_sources: list[Path], output: Path) -> dict:
+    """Create a compact, offline extract without inventing missing geometry."""
+    river_elements = {}
+    river_timestamps = []
+    for river_source in river_sources:
+        river_raw = json.loads(river_source.read_text(encoding="utf-8"))
+        timestamp = river_raw.get("osm3s", {}).get("timestamp_osm_base")
+        if timestamp:
+            river_timestamps.append(timestamp)
+        for element in river_raw.get("elements", []):
+            if element.get("type") == "way":
+                river_elements[element.get("id")] = element
+
+    rivers = []
+    for element in river_elements.values():
+        name = (element.get("tags") or {}).get("name")
+        if not name:
+            continue
+        paths = []
+        for points in _split_geometry(element.get("geometry")):
+            simplified = _simplify_path(points, 0.00045)
+            paths.append([[round(longitude, 6), round(latitude, 6)] for longitude, latitude in simplified])
+        if paths:
+            rivers.append(
+                {
+                    "name": name,
+                    "osmWayId": element["id"],
+                    "importance": "primary" if name in PRD_PRIMARY_RIVERS else "secondary",
+                    "officialNameListed": name in PRD_OFFICIALLY_LISTED_RIVERS,
+                    "paths": paths,
+                }
+            )
+
+    city_boundaries = []
+    boundary_timestamps = []
+    for source in boundary_sources:
+        raw = json.loads(source.read_text(encoding="utf-8"))
+        timestamp = raw.get("osm3s", {}).get("timestamp_osm_base")
+        if timestamp:
+            boundary_timestamps.append(timestamp)
+        for element in raw.get("elements", []):
+            if element.get("type") != "relation" or element.get("id") not in PRD_BOUNDARY_NAMES:
+                continue
+            paths = []
+            member_way_ids = []
+            for member in element.get("members", []):
+                if member.get("type") != "way" or member.get("role") not in ("", "outer"):
+                    continue
+                member_paths = _split_geometry(member.get("geometry"))
+                if not member_paths:
+                    continue
+                member_way_ids.append(member.get("ref"))
+                for points in member_paths:
+                    simplified = _simplify_path(points, 0.0007)
+                    paths.append([[round(longitude, 6), round(latitude, 6)] for longitude, latitude in simplified])
+            if paths:
+                tags = element.get("tags") or {}
+                city_boundaries.append(
+                    {
+                        "name": PRD_BOUNDARY_NAMES[element["id"]],
+                        "osmRelationId": element["id"],
+                        "adminLevel": tags.get("admin_level"),
+                        "wikidata": tags.get("wikidata"),
+                        "memberWayIds": member_way_ids,
+                        "paths": paths,
+                    }
+                )
+
+    result = {
+        "source": "OpenStreetMap contributors",
+        "sourceUrl": PRD_SOURCE_URL,
+        "queryReference": PRD_OVERPASS_QUERY_URL,
+        "license": "Open Database License (ODbL)",
+        "retrievedFrom": "Overpass API public instances",
+        "osmBaseTimestamps": {
+            "rivers": sorted(set(river_timestamps)),
+            "cityBoundaries": sorted(set(boundary_timestamps)),
+        },
+        "bounds": {"west": PRD_BOUNDS[0], "south": PRD_BOUNDS[1], "east": PRD_BOUNDS[2], "north": PRD_BOUNDS[3]},
+        "rivers": rivers,
+        "cityBoundaries": city_boundaries,
+        "omittedBoundaries": [
+            {
+                "name": "澳门",
+                "reason": "No verified single complete administrative relation was available in the audited extract; the existing city point is retained.",
+            }
+        ],
+    }
+    output.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return result
+
+
 def _create_prd_projection(bounds, width: int, height: int, padding: int = 62):
     west, south, east, north = bounds
     mercator_south = _mercator_y(south)
@@ -446,7 +617,19 @@ def _build_land_mask(paths, project, frame) -> Image.Image:
     return mask
 
 
-def build_pearl_river_delta_tech_map(coastline_data: dict, output: Path) -> None:
+def _save_preview(canvas: Image.Image, preview_dir: Path | None, filename: str) -> None:
+    if preview_dir is None:
+        return
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    canvas.convert("RGB").save(preview_dir / filename, "PNG", optimize=True)
+
+
+def build_pearl_river_delta_tech_map(
+    coastline_data: dict,
+    output: Path,
+    geography_data: dict | None = None,
+    preview_dir: Path | None = None,
+) -> None:
     project, frame = _create_prd_projection(PRD_BOUNDS, WIDTH, HEIGHT)
     yy, xx = np.mgrid[0:HEIGHT, 0:WIDTH]
     distance = np.sqrt(((xx - WIDTH * 0.52) / WIDTH) ** 2 + ((yy - HEIGHT * 0.48) / HEIGHT) ** 2)
@@ -467,12 +650,12 @@ def build_pearl_river_delta_tech_map(coastline_data: dict, output: Path) -> None
 
     grid = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     grid_draw = ImageDraw.Draw(grid)
-    for longitude in (112.5, 113.0, 113.5, 114.0, 114.5):
+    for longitude in (113.0, 114.0):
         x, _ = project(longitude, PRD_BOUNDS[1])
-        grid_draw.line((x, frame[1], x, frame[3]), fill=(94, 196, 218, 24), width=1)
-    for latitude in (22.0, 22.5, 23.0, 23.5):
+        grid_draw.line((x, frame[1], x, frame[3]), fill=(94, 196, 218, 34), width=1)
+    for latitude in (22.0, 23.0):
         _, y = project(PRD_BOUNDS[0], latitude)
-        grid_draw.line((frame[0], y, frame[2], y), fill=(94, 196, 218, 24), width=1)
+        grid_draw.line((frame[0], y, frame[2], y), fill=(94, 196, 218, 34), width=1)
     canvas.alpha_composite(grid)
 
     glow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
@@ -488,6 +671,80 @@ def build_pearl_river_delta_tech_map(coastline_data: dict, output: Path) -> None
     glow = glow.filter(ImageFilter.GaussianBlur(5))
     canvas.alpha_composite(glow)
     canvas.alpha_composite(line_layer)
+
+    geography_data = geography_data or {"rivers": [], "cityBoundaries": []}
+    river_glow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    river_glow_draw = ImageDraw.Draw(river_glow)
+    river_layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    river_draw = ImageDraw.Draw(river_layer)
+    river_paths_by_id = {}
+    for river in geography_data.get("rivers", []):
+        primary = river.get("importance") == "primary"
+        for path in river.get("paths", []):
+            projected = [project(longitude, latitude) for longitude, latitude in path]
+            if len(projected) < 2:
+                continue
+            river_glow_draw.line(
+                projected,
+                fill=(70, 196, 222, 38 if primary else 22),
+                width=8 if primary else 5,
+                joint="curve",
+            )
+            river_draw.line(
+                projected,
+                fill=(113, 210, 227, 172 if primary else 118),
+                width=4 if primary else 2,
+                joint="curve",
+            )
+            river_paths_by_id.setdefault(river["osmWayId"], []).append(path)
+    canvas.alpha_composite(river_glow.filter(ImageFilter.GaussianBlur(4)))
+    canvas.alpha_composite(river_layer)
+
+    river_labels = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    river_label_draw = ImageDraw.Draw(river_labels)
+    river_font = _load_font(19)
+    for label in PRD_RIVER_LABELS:
+        paths = river_paths_by_id.get(label["osmWayId"], [])
+        if not paths:
+            continue
+        anchor_longitude, anchor_latitude = label["anchor"]
+        point = min(
+            (point for path in paths for point in path),
+            key=lambda candidate: math.hypot(
+                candidate[0] - anchor_longitude,
+                candidate[1] - anchor_latitude,
+            ),
+        )
+        x, y = project(point[0], point[1])
+        offset_x, offset_y = label["offset"]
+        river_label_draw.text(
+            (x + offset_x, y + offset_y),
+            label["name"],
+            font=river_font,
+            fill=(155, 224, 235, 176),
+            stroke_width=2,
+            stroke_fill=(3, 19, 32, 180),
+        )
+    canvas.alpha_composite(river_labels)
+    _save_preview(canvas, preview_dir, "01-rivers-and-graticule.png")
+
+    boundary_layer = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    boundary_draw = ImageDraw.Draw(boundary_layer)
+    for boundary in geography_data.get("cityBoundaries", []):
+        is_zhuhai = boundary.get("name") == "珠海"
+        for path in boundary.get("paths", []):
+            projected = [project(longitude, latitude) for longitude, latitude in path]
+            if len(projected) < 2:
+                continue
+            boundary_draw.line(
+                projected,
+                fill=(126, 190, 205, 112 if is_zhuhai else 60),
+                width=2 if is_zhuhai else 1,
+                joint="curve",
+            )
+    boundary_layer.putalpha(ImageChops.multiply(boundary_layer.getchannel("A"), land_mask))
+    canvas.alpha_composite(boundary_layer)
+    _save_preview(canvas, preview_dir, "02-city-boundaries.png")
 
     hud = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     hud_draw = ImageDraw.Draw(hud)
@@ -509,6 +766,29 @@ def build_pearl_river_delta_tech_map(coastline_data: dict, output: Path) -> None
     label_draw = ImageDraw.Draw(labels)
     label_font = _load_font(25)
     city_font = _load_font(30, bold=True)
+    degree_font = _load_font(18)
+    for longitude in (113.0, 114.0):
+        x, _ = project(longitude, PRD_BOUNDS[1])
+        text = f"{int(longitude)}°E"
+        box = label_draw.textbbox((0, 0), text, font=degree_font)
+        label_draw.text(
+            (x - (box[2] - box[0]) / 2, frame[3] - 30),
+            text,
+            font=degree_font,
+            fill=(156, 203, 213, 150),
+            stroke_width=2,
+            stroke_fill=(3, 18, 30, 170),
+        )
+    for latitude in (22.0, 23.0):
+        _, y = project(PRD_BOUNDS[0], latitude)
+        label_draw.text(
+            (frame[0] + 10, y - 24),
+            f"{int(latitude)}°N",
+            font=degree_font,
+            fill=(156, 203, 213, 150),
+            stroke_width=2,
+            stroke_fill=(3, 18, 30, 170),
+        )
     for city in PRD_CITIES:
         x, y = project(city["longitude"], city["latitude"])
         label_draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(118, 224, 241, 220))
@@ -525,17 +805,21 @@ def build_pearl_river_delta_tech_map(coastline_data: dict, output: Path) -> None
     canvas.alpha_composite(labels)
 
     canvas.convert("RGB").save(output, "PNG", optimize=True)
+    _save_preview(canvas, preview_dir, "03-complete-map.png")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bmng-source", type=Path)
     parser.add_argument("--coastline-source", type=Path)
+    parser.add_argument("--geography-source", action="append", default=[], type=Path)
+    parser.add_argument("--boundary-source", action="append", default=[], type=Path)
     parser.add_argument("--ffmpeg-bin", type=Path)
+    parser.add_argument("--preview-dir", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
-    if not args.bmng_source and not args.coastline_source:
-        parser.error("provide --bmng-source and/or --coastline-source")
+    if not args.bmng_source and not args.coastline_source and not args.geography_source:
+        parser.error("provide --bmng-source, --coastline-source, and/or --geography-source")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if args.bmng_source:
         with Image.open(args.bmng_source) as source:
@@ -551,14 +835,32 @@ def main() -> None:
                     args.output_dir / "earth-to-china-south-sea.mp4",
                     args.ffmpeg_bin,
                 )
+    coastline_data = None
     if args.coastline_source:
         coastline_data = extract_prd_coastline(
             args.coastline_source,
             args.output_dir / "pearl-river-delta-osm-coastline.json",
         )
+    elif args.geography_source:
+        coastline_path = args.output_dir / "pearl-river-delta-osm-coastline.json"
+        if not coastline_path.exists():
+            parser.error("existing coastline JSON is required when --coastline-source is omitted")
+        coastline_data = json.loads(coastline_path.read_text(encoding="utf-8"))
+
+    geography_data = None
+    if args.geography_source:
+        geography_data = extract_prd_geography(
+            args.geography_source,
+            args.boundary_source,
+            args.output_dir / "pearl-river-delta-osm-geography.json",
+        )
+
+    if coastline_data:
         build_pearl_river_delta_tech_map(
             coastline_data,
             args.output_dir / "pearl-river-delta-tech-map.png",
+            geography_data,
+            args.preview_dir,
         )
 
 

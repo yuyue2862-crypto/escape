@@ -10,6 +10,8 @@
   const TARGET_LINE_DELAY = 90;
   const TARGET_REVEAL_DELAY = 2000;
   const TARGET_TYPING_SOUND_PEAK = 0.028;
+  const CITY_TEST_GLOBE_FADE_DURATION = 2000;
+  const CITY_TEST_GLOBE_SETTLE_DURATION = 1000;
   const RETURN_HOME_TYPING_INTERVAL = 44;
   const RETURN_HOME_LINE_DELAY = 240;
   const NEXT_TASK_DELAY = 1400;
@@ -59,6 +61,9 @@
     let nextTaskTimer = null;
     let typingTimer = null;
     let targetRevealTimer = null;
+    let cityTestIntroTimer = null;
+    let cityTestIntroFrame = null;
+    let cityTestIntroToken = 0;
     let typingToken = 0;
     let typingAudioContext = null;
 
@@ -89,6 +94,15 @@
     const stopNextTaskTimer = () => {
       if (nextTaskTimer !== null) window.clearTimeout(nextTaskTimer);
       nextTaskTimer = null;
+    };
+
+    const stopCityTestIntro = () => {
+      cityTestIntroToken += 1;
+      if (cityTestIntroTimer !== null) window.clearTimeout(cityTestIntroTimer);
+      if (cityTestIntroFrame !== null) window.cancelAnimationFrame(cityTestIntroFrame);
+      cityTestIntroTimer = null;
+      cityTestIntroFrame = null;
+      stage?.classList.remove("is-real-test-intro", "is-real-test-globe-visible");
     };
 
     const renderTaskInstruction = ({ prepareTyping = false } = {}) => {
@@ -283,6 +297,35 @@
       globe.setMode("interactive");
     };
 
+    const startCityTestIntro = (activeGlobe, taskIndex) => {
+      stopCityTestIntro();
+      const token = cityTestIntroToken;
+      phase = "intro";
+      activeGlobe.clearSelection();
+      activeGlobe.setMode("idle");
+      setFeedback();
+      renderTaskInstruction();
+      // Keep the test title and operating instruction visible from the scene
+      // switch. Only the city-specific target waits for the globe to settle.
+      targetNode?.replaceChildren();
+      targetNode?.setAttribute("hidden", "");
+      statusNode?.removeAttribute("hidden");
+      statusNode?.setAttribute("aria-hidden", "false");
+      stage?.classList.add("is-real-test-intro");
+
+      cityTestIntroFrame = window.requestAnimationFrame(() => {
+        cityTestIntroFrame = null;
+        if (destroyed || token !== cityTestIntroToken) return;
+        stage?.classList.add("is-real-test-globe-visible");
+        cityTestIntroTimer = window.setTimeout(() => {
+          cityTestIntroTimer = null;
+          if (destroyed || token !== cityTestIntroToken) return;
+          stage?.classList.remove("is-real-test-intro", "is-real-test-globe-visible");
+          activateLocationTask(taskIndex);
+        }, CITY_TEST_GLOBE_FADE_DURATION + CITY_TEST_GLOBE_SETTLE_DURATION);
+      });
+    };
+
     const getPrecisionThresholds = () => {
       const task = getCurrentTask();
       const scale = globe.getScale();
@@ -372,6 +415,7 @@
         ensureStatus();
         stopNextTaskTimer();
         stopTargetTyping();
+        stopCityTestIntro();
         if (Array.isArray(taskIds) && taskIds.length) {
           const nextTasks = resolveLocationTasks(taskIds);
           if (!nextTasks.length) throw new Error("Task four requires at least one location task.");
@@ -382,15 +426,20 @@
           ? locationTasks.findIndex((task) => task.id === taskId)
           : -1;
         currentTaskIndex = requestedTaskIndex >= 0 ? requestedTaskIndex : 0;
-        statusNode?.removeAttribute("hidden");
         activeGlobe.clearMarkers();
         const completedIds = new Set(completedTaskIds);
         LOCATION_TASKS.forEach((task) => {
           if (completedIds.has(task.id)) activeGlobe.addMarker(task);
         });
-        activateLocationTask(currentTaskIndex);
         stage?.setAttribute("aria-hidden", "false");
         stage?.removeAttribute("hidden");
+        if (presentationMode === "city-test") {
+          startCityTestIntro(activeGlobe, currentTaskIndex);
+          return;
+        }
+        statusNode?.removeAttribute("hidden");
+        statusNode?.setAttribute("aria-hidden", "false");
+        activateLocationTask(currentTaskIndex);
       },
 
       showFinalLocationComplete({ completedTaskIds = ["beijing", "rio-de-janeiro", "zhuhai"] } = {}) {
@@ -399,6 +448,7 @@
         ensureStatus();
         stopNextTaskTimer();
         stopTargetTyping();
+        stopCityTestIntro();
         locationTasks = resolveLocationTasks(["zhuhai"]);
         currentTaskIndex = 0;
         presentationMode = "return-home";
@@ -423,6 +473,7 @@
         ensureStatus();
         stopNextTaskTimer();
         stopTargetTyping();
+        stopCityTestIntro();
         currentTaskIndex = locationTasks.length - 1;
         activeGlobe.clearSelection();
         activeGlobe.clearMarkers();
@@ -503,6 +554,7 @@
       destroy() {
         if (destroyed) return;
         stopNextTaskTimer();
+        stopCityTestIntro();
         globe?.destroy();
         globe = null;
         stopTargetTyping();

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>任务四收尾 UI 验收预览</title>
+  <link rel="stylesheet" href="../../styles.css">
+  <link rel="stylesheet" href="../../task4/task4.css">
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #020b12; }
+    body { font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; }
+    .preview-stage { position: fixed; inset: 0; overflow: hidden; background: radial-gradient(circle at 60% 48%, #0a2630 0, #03131d 52%, #01080e 100%); }
+    .preview-stage .task4-stage__status { z-index: 3; }
+    .preview-stage .task4-globe-mount { z-index: 1; }
+    .preview-note { position: fixed; z-index: 20; right: 1rem; bottom: 1rem; padding: 0.5rem 0.8rem; border: 1px solid rgba(112, 211, 234, 0.4); border-radius: 999px; color: #bfeaf3; background: rgba(2, 17, 25, 0.78); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main id="stage" class="task4-stage preview-stage"></main>
+  <div id="note" class="preview-note"></div>
+  <script src="../../task4/natural-earth-land-data.js"></script>
+  <script src="../../task4/real-earth-globe.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const mode = params.get("mode") || "globe";
+    const stage = document.querySelector("#stage");
+    const note = document.querySelector("#note");
+
+    if (mode === "archive") {
+      stage.classList.add("is-s413-archive");
+      stage.innerHTML = `
+        <section class="task4-return-archive is-visible is-complete" aria-label="最终返航记录">
+          <div class="task4-return-archive__panel" role="document">
+            <header class="task4-return-archive__header"><span aria-hidden="true"></span><h2>最终返航记录</h2></header>
+            <div class="task4-return-archive__body">
+              <ol class="task4-return-archive__achievements">
+                <li class="is-visible">通过纬线确定南北位置。</li>
+                <li class="is-visible">通过经线确定东西位置。</li>
+                <li class="is-visible">通过经纬线交点确定具体位置。</li>
+                <li class="is-visible">利用经纬网找到回家的坐标。</li>
+              </ol>
+              <div class="task4-return-archive__badge" role="img" aria-label="优秀宇航员徽章">
+                <span class="task4-return-archive__badge-star" aria-hidden="true">★</span>
+                <strong>优秀宇航员！</strong>
+                <span class="task4-return-archive__badge-orbit" aria-hidden="true"></span>
+              </div>
+            </div>
+            <dl class="task4-return-archive__result is-visible">
+              <div><dt>返航目的地</dt><dd>珠海</dd></div>
+              <div><dt>返航坐标</dt><dd>22.27°N，113.58°E</dd></div>
+              <div><dt>返航状态</dt><dd>成功</dd></div>
+            </dl>
+          </div>
+        </section>`;
+      note.textContent = "最终返航记录 · 印章验收";
+    } else {
+      stage.innerHTML = `
+        <div class="task4-stage__status" data-presentation="return-home">
+          <p class="task4-stage__title">寻找回家的坐标</p>
+          <p class="task4-stage__instruction is-return-home">
+            <span class="task4-stage__instruction-line">返航目的地：珠海</span>
+            <span class="task4-stage__instruction-line">已获得坐标：22.27°N，113.58°E</span>
+            <span class="task4-stage__instruction-line">请利用经纬网，亲自锁定返航位置。</span>
+          </p>
+        </div>
+        <div id="mount" class="task4-globe-mount"></div>`;
+      const scale = Number(params.get("scale") || 2);
+      const globe = window.Task4RealEarthGlobe.create({ mount: document.querySelector("#mount") });
+      globe.create();
+      globe.setMode("interactive");
+      globe.setView({ latitude: 22.27, longitude: 113.58 });
+      globe.addMarker({ id: "beijing", label: "北京", latitude: 40, longitude: 116, type: "target" });
+      globe.addMarker({ id: "rio-de-janeiro", label: "里约热内卢", latitude: -23, longitude: -43, type: "target" });
+      globe.addMarker({ id: "zhuhai", label: "珠海", latitude: 22.27, longitude: 113.58, type: "target" });
+      if (typeof globe.setMaxScale === "function") globe.setMaxScale(4);
+      globe.setScale(scale);
+      note.textContent = `珠海定位 · scale ${globe.getScale()}`;
+    }
+  </script>
+</body>
+</html>

@@ -4844,8 +4844,10 @@
     buildLongitudeTeachingGlobe();
     resetLongitudeTeachingVisuals();
     buildTask4DualLatitudeLines();
-    showCompleteLongitudeNotation("ew");
-    getLongitudeLineGroup(-180)?.classList.remove("is-antimeridian-highlight");
+    // 180° and -180° share this single rendered meridian. Keep its degree
+    // label, but do not borrow the Task 3 antimeridian emphasis while Task 4
+    // asks the player to identify 120°E.
+    showCompleteLongitudeNotation("ew", { highlightAntimeridian: false });
     setTask4DualLineSelection("both");
     setTask4DualActions();
     showTask4DualCopy({
@@ -6004,12 +6006,18 @@
     showLongitudeLabel("shared", 180);
   }
 
-  function showCompleteLongitudeNotation(notation = "ew") {
+  function showCompleteLongitudeNotation(
+    notation = "ew",
+    { highlightAntimeridian = true } = {},
+  ) {
     showLongitudeLabel("prime", 0);
     showLongitudeDirection("east", notation);
     showLongitudeDirection("west", notation);
     showLongitudeLabel("shared", 180);
-    getLongitudeLineGroup(-180)?.classList.toggle("is-antimeridian-highlight", notation === "ew");
+    getLongitudeLineGroup(-180)?.classList.toggle(
+      "is-antimeridian-highlight",
+      notation === "ew" && highlightAntimeridian,
+    );
   }
 
   function setLongitudeMarker(longitude) {
